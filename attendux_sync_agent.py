@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtNetwork import *
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 # Platform-specific startup imports
 PLATFORM = platform.system()
@@ -58,6 +59,78 @@ LOGO_URL = "https://app.attendux.com/public/storage/logo.png"
 # Settings file
 SETTINGS_FILE = os.path.join(os.path.expanduser("~"), ".attendux_sync", "settings.json")
 
+# Translations
+TRANSLATIONS = {
+    'ar': {
+        'app_title': 'وكيل مزامنة أتندوكس',
+        'app_subtitle': 'مزامنة أجهزة البصمة متعددة المستأجرين',
+        'version': 'الإصدار',
+        'license_key': 'مفتاح الترخيص',
+        'license_placeholder': 'أدخل مفتاح الترخيص الخاص بك (ATX-XXXX-XXXX-XXXX-XXXX)',
+        'connect': 'اتصال',
+        'disconnect': 'قطع الاتصال',
+        'company': 'الشركة',
+        'license_status': 'حالة الترخيص',
+        'valid_until': 'صالح حتى',
+        'plan': 'الخطة',
+        'devices': 'الأجهزة',
+        'no_devices': 'لم يتم العثور على أجهزة',
+        'start_sync': 'بدء المزامنة',
+        'stop_sync': 'إيقاف المزامنة',
+        'open_dashboard': 'فتح لوحة التحكم',
+        'settings': 'الإعدادات',
+        'sync_interval': 'فترة المزامنة (دقائق)',
+        'auto_sync': 'مزامنة تلقائية',
+        'startup': 'بدء مع النظام',
+        'notifications': 'إشعارات',
+        'logs': 'السجلات',
+        'clear_logs': 'مسح السجلات',
+        'status_connected': 'متصل',
+        'status_disconnected': 'غير متصل',
+        'invalid_license': 'ترخيص غير صالح',
+        'connecting': 'جاري الاتصال...',
+        'syncing': 'جاري المزامنة...',
+        'sync_completed': 'اكتملت المزامنة',
+        'language': 'اللغة',
+        'arabic': 'العربية',
+        'english': 'English'
+    },
+    'en': {
+        'app_title': 'Attendux Sync Agent',
+        'app_subtitle': 'Multi-Tenant ZKTeco Device Synchronization',
+        'version': 'Version',
+        'license_key': 'License Key',
+        'license_placeholder': 'Enter your license key (ATX-XXXX-XXXX-XXXX-XXXX)',
+        'connect': 'Connect',
+        'disconnect': 'Disconnect',
+        'company': 'Company',
+        'license_status': 'License Status',
+        'valid_until': 'Valid Until',
+        'plan': 'Plan',
+        'devices': 'Devices',
+        'no_devices': 'No devices found',
+        'start_sync': 'Start Sync',
+        'stop_sync': 'Stop Sync',
+        'open_dashboard': 'Open Dashboard',
+        'settings': 'Settings',
+        'sync_interval': 'Sync Interval (minutes)',
+        'auto_sync': 'Auto Sync',
+        'startup': 'Start with System',
+        'notifications': 'Notifications',
+        'logs': 'Logs',
+        'clear_logs': 'Clear Logs',
+        'status_connected': 'Connected',
+        'status_disconnected': 'Disconnected',
+        'invalid_license': 'Invalid License',
+        'connecting': 'Connecting...',
+        'syncing': 'Syncing...',
+        'sync_completed': 'Sync Completed',
+        'language': 'Language',
+        'arabic': 'العربية',
+        'english': 'English'
+    }
+}
+
 
 class SettingsManager:
     """Manage app settings"""
@@ -77,7 +150,8 @@ class SettingsManager:
             'sync_interval': 15,
             'auto_start': True,
             'show_notifications': True,
-            'last_sync': None
+            'last_sync': None,
+            'language': 'ar'  # Arabic as default
         }
     
     @staticmethod
@@ -251,18 +325,75 @@ class AttenduxSyncAgent(QMainWindow):
     def __init__(self):
         super().__init__()
         self.settings = SettingsManager.load()
+        self.current_language = self.settings.get('language', 'ar')
         self.api = None
         self.company_info = None
         self.sync_worker = None
         self.sync_timer = QTimer()
         self.sync_timer.timeout.connect(self.start_sync)
+        self.dashboard_browser = None
+        
+        # Set initial layout direction based on language
+        if self.current_language == 'ar':
+            QApplication.setLayoutDirection(Qt.RightToLeft)
+        else:
+            QApplication.setLayoutDirection(Qt.LeftToRight)
         
         self.init_ui()
         self.load_logo()
+        self.update_ui_language()
         
         # Auto-connect if license key exists
         if self.settings.get('license_key'):
             QTimer.singleShot(1000, self.auto_connect)
+    
+    def tr(self, key):
+        """Translate key to current language"""
+        return TRANSLATIONS.get(self.current_language, TRANSLATIONS['ar']).get(key, key)
+    
+    def switch_language(self, lang_code):
+        """Switch application language"""
+        self.current_language = lang_code
+        self.settings['language'] = lang_code
+        self.save_settings()
+        
+        # Set layout direction for RTL languages
+        if lang_code == 'ar':
+            QApplication.setLayoutDirection(Qt.RightToLeft)
+        else:
+            QApplication.setLayoutDirection(Qt.LeftToRight)
+        
+        self.update_ui_language()
+        self.log(f"🌐 Language switched to: {lang_code}", "info")
+    
+    def update_ui_language(self):
+        """Update all UI elements with current language"""
+        self.setWindowTitle(self.tr('app_title'))
+        # Update all translatable UI elements
+        if hasattr(self, 'subtitle_label'):
+            self.subtitle_label.setText(self.tr('app_subtitle'))
+        if hasattr(self, 'license_label'):
+            self.license_label.setText(self.tr('license_key') + ":")
+        if hasattr(self, 'license_input'):
+            self.license_input.setPlaceholderText(self.tr('license_placeholder'))
+        if hasattr(self, 'connect_btn'):
+            self.connect_btn.setText(self.tr('connect'))
+        if hasattr(self, 'dashboard_btn'):
+            self.dashboard_btn.setText(self.tr('open_dashboard'))
+        if hasattr(self, 'start_sync_btn'):
+            self.start_sync_btn.setText(self.tr('start_sync'))
+        if hasattr(self, 'settings_group'):
+            self.settings_group.setTitle(self.tr('settings'))
+        if hasattr(self, 'logs_group'):
+            self.logs_group.setTitle(self.tr('logs'))
+        if hasattr(self, 'auto_sync_checkbox'):
+            self.auto_sync_checkbox.setText(self.tr('auto_sync'))
+        if hasattr(self, 'startup_checkbox'):
+            self.startup_checkbox.setText(self.tr('startup'))
+        if hasattr(self, 'notifications_checkbox'):
+            self.notifications_checkbox.setText(self.tr('notifications'))
+        if hasattr(self, 'clear_logs_btn'):
+            self.clear_logs_btn.setText(self.tr('clear_logs'))
     
     def init_ui(self):
         """Initialize UI"""
@@ -323,20 +454,50 @@ class AttenduxSyncAgent(QMainWindow):
         
         # Title
         title_layout = QVBoxLayout()
-        title = QLabel("Attendux Sync Agent")
-        title.setObjectName("title")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: " + BRAND_PRIMARY_DARK)
-        subtitle = QLabel("Multi-Tenant ZKTeco Device Synchronization")
-        subtitle.setStyleSheet("font-size: 12px; color: #666;")
-        title_layout.addWidget(title)
-        title_layout.addWidget(subtitle)
+        self.title_label = QLabel(self.tr('app_title'))
+        self.title_label.setObjectName("title")
+        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: " + BRAND_PRIMARY_DARK)
+        self.subtitle_label = QLabel(self.tr('app_subtitle'))
+        self.subtitle_label.setStyleSheet("font-size: 12px; color: #666;")
+        title_layout.addWidget(self.title_label)
+        title_layout.addWidget(self.subtitle_label)
         header_layout.addLayout(title_layout)
         
         header_layout.addStretch()
         
+        # Language Switcher
+        lang_widget = QWidget()
+        lang_layout = QHBoxLayout(lang_widget)
+        lang_layout.setContentsMargins(0, 0, 0, 0)
+        lang_layout.setSpacing(5)
+        
+        lang_label = QLabel(self.tr('language') + ":")
+        lang_label.setStyleSheet("font-size: 11px; color: #666;")
+        lang_layout.addWidget(lang_label)
+        
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItem("العربية", "ar")
+        self.lang_combo.addItem("English", "en")
+        self.lang_combo.setCurrentIndex(0 if self.current_language == 'ar' else 1)
+        self.lang_combo.currentIndexChanged.connect(lambda: self.switch_language(self.lang_combo.currentData()))
+        self.lang_combo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid {BRAND_PRIMARY};
+                border-radius: 4px;
+                padding: 3px 8px;
+                font-size: 11px;
+                min-width: 80px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+            }}
+        """)
+        lang_layout.addWidget(self.lang_combo)
+        header_layout.addWidget(lang_widget)
+        
         # Version
-        version = QLabel("v1.0.0")
-        version.setStyleSheet("color: #999; font-size: 11px;")
+        version = QLabel("v1.1.0")
+        version.setStyleSheet("color: #999; font-size: 11px; margin-left: 10px;")
         header_layout.addWidget(version)
         
         layout.addWidget(header_widget)
@@ -548,10 +709,25 @@ class AttenduxSyncAgent(QMainWindow):
                 pixmap.loadFromData(response.content)
                 self.logo_label.setPixmap(pixmap)
                 
-                # Set tray icon
+                # Set tray icon and window icon
                 icon = QIcon(pixmap)
                 self.tray_icon.setIcon(icon)
                 self.setWindowIcon(icon)
+                
+                # Save logo for macOS .app bundle icon
+                if PLATFORM == 'Darwin':
+                    icon_dir = os.path.join(os.path.expanduser("~"), ".attendux_sync")
+                    os.makedirs(icon_dir, exist_ok=True)
+                    icon_path = os.path.join(icon_dir, "logo.png")
+                    pixmap.save(icon_path, 'PNG')
+                    
+                # Save logo for Windows .ico file
+                elif PLATFORM == 'Windows':
+                    icon_dir = os.path.join(os.path.expanduser("~"), ".attendux_sync")
+                    os.makedirs(icon_dir, exist_ok=True)
+                    icon_path = os.path.join(icon_dir, "logo.png")
+                    pixmap.save(icon_path, 'PNG')
+                    
         except Exception as e:
             print(f"Failed to load logo: {e}")
     
@@ -617,18 +793,115 @@ class AttenduxSyncAgent(QMainWindow):
         self.connect_btn.setEnabled(True)
     
     def open_dashboard(self):
-        """Open Attendux dashboard in web browser"""
-        import webbrowser
+        """Open Attendux dashboard in embedded browser"""
         dashboard_url = "https://app.attendux.com"
         
         try:
-            webbrowser.open(dashboard_url)
-            self.log(f"🌐 Opening dashboard: {dashboard_url}", "info")
+            # Create dashboard window if not exists
+            if not self.dashboard_browser or not self.dashboard_browser.isVisible():
+                self.dashboard_browser = QWidget()
+                self.dashboard_browser.setWindowTitle(self.tr('open_dashboard') + " - Attendux")
+                self.dashboard_browser.setMinimumSize(1200, 800)
+                
+                # Center the browser window
+                screen = QApplication.desktop().screenGeometry()
+                self.dashboard_browser.setGeometry(
+                    (screen.width() - 1200) // 2,
+                    (screen.height() - 800) // 2,
+                    1200, 800
+                )
+                
+                # Create layout
+                browser_layout = QVBoxLayout(self.dashboard_browser)
+                browser_layout.setContentsMargins(0, 0, 0, 0)
+                
+                # Create web view
+                web_view = QWebEngineView()
+                web_view.setUrl(QUrl(dashboard_url))
+                browser_layout.addWidget(web_view)
+                
+                # Add toolbar for navigation
+                toolbar = QWidget()
+                toolbar_layout = QHBoxLayout(toolbar)
+                toolbar_layout.setContentsMargins(10, 5, 10, 5)
+                
+                # Back button
+                back_btn = QPushButton("◀ " + ("رجوع" if self.current_language == 'ar' else "Back"))
+                back_btn.clicked.connect(web_view.back)
+                back_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {BRAND_PRIMARY};
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 5px 15px;
+                        font-size: 12px;
+                    }}
+                    QPushButton:hover {{ background-color: {BRAND_PRIMARY_DARK}; }}
+                """)
+                toolbar_layout.addWidget(back_btn)
+                
+                # Forward button
+                forward_btn = QPushButton(("التالي" if self.current_language == 'ar' else "Forward") + " ▶")
+                forward_btn.clicked.connect(web_view.forward)
+                forward_btn.setStyleSheet(back_btn.styleSheet())
+                toolbar_layout.addWidget(forward_btn)
+                
+                # Refresh button
+                refresh_btn = QPushButton("🔄 " + ("تحديث" if self.current_language == 'ar' else "Refresh"))
+                refresh_btn.clicked.connect(web_view.reload)
+                refresh_btn.setStyleSheet(back_btn.styleSheet())
+                toolbar_layout.addWidget(refresh_btn)
+                
+                # URL bar
+                url_bar = QLineEdit(dashboard_url)
+                url_bar.setReadOnly(True)
+                url_bar.setStyleSheet("""
+                    QLineEdit {
+                        border: 1px solid #ddd;
+                        border-radius: 4px;
+                        padding: 5px 10px;
+                        font-size: 11px;
+                        background-color: #f9f9f9;
+                    }
+                """)
+                toolbar_layout.addWidget(url_bar, 1)
+                
+                # Close button
+                close_btn = QPushButton("✖ " + ("إغلاق" if self.current_language == 'ar' else "Close"))
+                close_btn.clicked.connect(self.dashboard_browser.close)
+                close_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {BRAND_DANGER};
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 5px 15px;
+                        font-size: 12px;
+                    }}
+                    QPushButton:hover {{ background-color: #dc2626; }}
+                """)
+                toolbar_layout.addWidget(close_btn)
+                
+                # Insert toolbar at top
+                browser_layout.insertWidget(0, toolbar)
+                
+                # Update URL bar when page changes
+                web_view.urlChanged.connect(lambda url: url_bar.setText(url.toString()))
+            
+            # Show the browser window
+            self.dashboard_browser.show()
+            self.dashboard_browser.raise_()
+            self.dashboard_browser.activateWindow()
+            
+            self.log(f"🌐 {self.tr('open_dashboard')}: {dashboard_url}", "info")
             
             if self.notifications_checkbox.isChecked():
+                msg_title = "لوحة التحكم" if self.current_language == 'ar' else "Dashboard Opened"
+                msg_text = "تم فتح لوحة التحكم" if self.current_language == 'ar' else "Attendux dashboard opened"
                 self.tray_icon.showMessage(
-                    "Dashboard Opened",
-                    "Attendux dashboard opened in your browser",
+                    msg_title,
+                    msg_text,
                     QSystemTrayIcon.Information,
                     2000
                 )
@@ -941,7 +1214,7 @@ class AttenduxSyncAgent(QMainWindow):
         QApplication.quit()
     
     def get_stylesheet(self):
-        """Get application stylesheet"""
+        """Get application stylesheet with proper sizing"""
         return f"""
             QMainWindow {{
                 background-color: {BRAND_GRAY_100};
@@ -949,38 +1222,49 @@ class AttenduxSyncAgent(QMainWindow):
             
             QGroupBox {{
                 font-weight: bold;
+                font-size: 13px;
                 border: 2px solid {BRAND_PRIMARY};
                 border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
+                margin-top: 15px;
+                padding-top: 15px;
+                padding-bottom: 10px;
                 background-color: white;
             }}
             
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 10px;
-                padding: 0 5px;
+                padding: 0 8px;
                 color: {BRAND_PRIMARY_DARK};
             }}
             
             #statusWidget {{
                 background: white;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 15px;
+                min-height: 40px;
             }}
             
             QPushButton {{
                 background-color: {BRAND_PRIMARY};
                 color: white;
                 border: none;
-                padding: 10px 20px;
-                border-radius: 6px;
+                padding: 12px 24px;
+                border-radius: 8px;
                 font-weight: 600;
-                min-width: 100px;
+                font-size: 13px;
+                min-width: 120px;
+                min-height: 42px;
             }}
             
             QPushButton:hover {{
                 background-color: {BRAND_PRIMARY_DARK};
+                transform: scale(1.02);
+            }}
+            
+            QPushButton:pressed {{
+                background-color: {BRAND_PRIMARY_DARK};
+                padding-top: 14px;
             }}
             
             QPushButton:disabled {{
@@ -1013,63 +1297,113 @@ class AttenduxSyncAgent(QMainWindow):
             }}
             
             QLineEdit {{
-                padding: 8px;
+                padding: 12px 16px;
                 border: 2px solid #e5e7eb;
-                border-radius: 6px;
+                border-radius: 8px;
                 background: white;
+                font-size: 13px;
+                min-height: 42px;
             }}
             
             QLineEdit:focus {{
                 border-color: {BRAND_PRIMARY};
+                border-width: 2px;
             }}
             
             QListWidget {{
                 border: 2px solid #e5e7eb;
-                border-radius: 6px;
+                border-radius: 8px;
                 background: white;
-                padding: 5px;
+                padding: 8px;
+                font-size: 13px;
             }}
             
             QListWidget::item {{
-                padding: 8px;
+                padding: 12px;
                 border-bottom: 1px solid #f3f4f6;
+                min-height: 36px;
             }}
             
             QListWidget::item:hover {{
                 background-color: #f0f9ff;
+                border-radius: 4px;
             }}
             
             QTextEdit {{
                 border: 2px solid #e5e7eb;
-                border-radius: 6px;
+                border-radius: 8px;
                 background: #fafafa;
-                padding: 5px;
+                padding: 10px;
                 font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 11px;
+                font-size: 12px;
+                line-height: 1.5;
             }}
             
             QSpinBox {{
-                padding: 6px;
+                padding: 10px 12px;
                 border: 2px solid #e5e7eb;
-                border-radius: 6px;
+                border-radius: 8px;
                 background: white;
+                font-size: 13px;
+                min-height: 42px;
+            }}
+            
+            QSpinBox::up-button, QSpinBox::down-button {{
+                width: 24px;
+                border-radius: 4px;
             }}
             
             QCheckBox {{
-                spacing: 5px;
+                spacing: 8px;
+                font-size: 13px;
+                padding: 5px;
             }}
             
             QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
+                width: 20px;
+                height: 20px;
                 border: 2px solid #e5e7eb;
-                border-radius: 4px;
+                border-radius: 5px;
                 background: white;
+            }}
+            
+            QCheckBox::indicator:hover {{
+                border-color: {BRAND_PRIMARY};
             }}
             
             QCheckBox::indicator:checked {{
                 background-color: {BRAND_PRIMARY};
                 border-color: {BRAND_PRIMARY};
+            }}
+            
+            QComboBox {{
+                padding: 10px 12px;
+                border: 2px solid #e5e7eb;
+                border-radius: 8px;
+                background: white;
+                font-size: 13px;
+                min-height: 42px;
+            }}
+            
+            QComboBox:hover {{
+                border-color: {BRAND_PRIMARY};
+            }}
+            
+            QComboBox::drop-down {{
+                border: none;
+                width: 30px;
+            }}
+            
+            QComboBox::down-arrow {{
+                image: none;
+                border: solid {BRAND_PRIMARY};
+                border-width: 0 2px 2px 0;
+                padding: 3px;
+                transform: rotate(45deg);
+            }}
+            
+            QLabel {{
+                font-size: 13px;
             }}
         """
 

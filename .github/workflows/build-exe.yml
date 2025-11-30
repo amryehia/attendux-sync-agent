@@ -38,9 +38,28 @@ jobs:
       continue-on-error: true
       shell: powershell
     
+    - name: Download logo for app icon
+      run: |
+        python download_logo.py
+      continue-on-error: true
+      shell: powershell
+    
+    - name: Convert PNG to ICO (Windows icon)
+      run: |
+        if (Test-Path "logo.png") {
+          pip install Pillow
+          python -c "from PIL import Image; img = Image.open('logo.png'); img.save('logo.ico', format='ICO', sizes=[(256,256)])"
+        }
+      continue-on-error: true
+      shell: powershell
+    
     - name: Build EXE with PyInstaller
       run: |
-        pyinstaller --onefile --windowed --name "Attendux-Sync-Agent" attendux_sync_agent.py
+        if (Test-Path "logo.ico") {
+          pyinstaller --onefile --windowed --name "Attendux-Sync-Agent" --icon=logo.ico attendux_sync_agent.py
+        } else {
+          pyinstaller --onefile --windowed --name "Attendux-Sync-Agent" attendux_sync_agent.py
+        }
       shell: powershell
     
     - name: Verify build
@@ -139,9 +158,18 @@ jobs:
         pip install pyzk || echo "pyzk installation failed, continuing..."
       continue-on-error: true
     
+    - name: Download logo for app icon
+      run: |
+        python download_logo.py || echo "Logo download failed, using default icon..."
+      continue-on-error: true
+    
     - name: Build .app with PyInstaller
       run: |
-        pyinstaller --onefile --windowed --name "Attendux Sync Agent" attendux_sync_agent.py
+        if [ -f "logo.png" ]; then
+          pyinstaller --onefile --windowed --name "Attendux Sync Agent" --icon=logo.png attendux_sync_agent.py
+        else
+          pyinstaller --onefile --windowed --name "Attendux Sync Agent" attendux_sync_agent.py
+        fi
     
     - name: Verify build
       run: |
