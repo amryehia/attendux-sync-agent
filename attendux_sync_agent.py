@@ -413,6 +413,15 @@ class AttenduxSyncAgent(QMainWindow):
             app_font = QFont("Segoe UI", 10)
             QApplication.setFont(app_font)
         
+        # Refresh stylesheet with new language's font
+        self.setStyleSheet(self.get_stylesheet())
+        
+        # Update title and subtitle fonts
+        title_font = "font-family: 'Cairo', sans-serif;" if lang_code == 'ar' else ""
+        self.title_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {BRAND_PRIMARY_DARK}; {title_font}")
+        subtitle_font = "font-family: 'Cairo', sans-serif;" if lang_code == 'ar' else ""
+        self.subtitle_label.setStyleSheet(f"font-size: 12px; color: #666; {subtitle_font}")
+        
         self.update_ui_language()
         self.log(f"🌐 Language switched to: {lang_code}", "info")
     
