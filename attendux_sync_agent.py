@@ -402,25 +402,8 @@ class AttenduxSyncAgent(QMainWindow):
         # Set layout direction for RTL languages
         if lang_code == 'ar':
             QApplication.setLayoutDirection(Qt.RightToLeft)
-            # Set Cairo font for Arabic
-            app_font = QFont("Cairo", 10)
-            if not app_font.exactMatch():
-                app_font = QFont("Segoe UI", 10)
-            QApplication.setFont(app_font)
         else:
             QApplication.setLayoutDirection(Qt.LeftToRight)
-            # Reset to default font for English
-            app_font = QFont("Segoe UI", 10)
-            QApplication.setFont(app_font)
-        
-        # Refresh stylesheet with new language's font
-        self.setStyleSheet(self.get_stylesheet())
-        
-        # Update title and subtitle fonts
-        title_font = "font-family: 'Cairo', sans-serif;" if lang_code == 'ar' else ""
-        self.title_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {BRAND_PRIMARY_DARK}; {title_font}")
-        subtitle_font = "font-family: 'Cairo', sans-serif;" if lang_code == 'ar' else ""
-        self.subtitle_label.setStyleSheet(f"font-size: 12px; color: #666; {subtitle_font}")
         
         self.update_ui_language()
         self.log(f"🌐 Language switched to: {lang_code}", "info")
@@ -476,14 +459,6 @@ class AttenduxSyncAgent(QMainWindow):
         """Initialize UI"""
         self.setWindowTitle(self.tr('app_title'))
         self.setMinimumSize(1100, 800)
-        
-        # Set Cairo font for Arabic
-        if self.current_language == 'ar':
-            app_font = QFont("Cairo", 10)
-            if not app_font.exactMatch():
-                # Fallback to other Arabic fonts if Cairo not available
-                app_font = QFont("Segoe UI", 10)
-            QApplication.setFont(app_font)
         
         self.setStyleSheet(self.get_stylesheet())
         
@@ -543,11 +518,9 @@ class AttenduxSyncAgent(QMainWindow):
         title_layout = QVBoxLayout()
         self.title_label = QLabel(self.tr('app_title'))
         self.title_label.setObjectName("title")
-        title_font = "font-family: 'Cairo', sans-serif;" if self.current_language == 'ar' else ""
-        self.title_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {BRAND_PRIMARY_DARK}; {title_font}")
+        self.title_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {BRAND_PRIMARY_DARK};")
         self.subtitle_label = QLabel(self.tr('app_subtitle'))
-        subtitle_font = "font-family: 'Cairo', sans-serif;" if self.current_language == 'ar' else ""
-        self.subtitle_label.setStyleSheet(f"font-size: 12px; color: #666; {subtitle_font}")
+        self.subtitle_label.setStyleSheet(f"font-size: 12px; color: #666;")
         title_layout.addWidget(self.title_label)
         title_layout.addWidget(self.subtitle_label)
         header_layout.addLayout(title_layout)
@@ -1237,12 +1210,9 @@ class AttenduxSyncAgent(QMainWindow):
     
     def get_stylesheet(self):
         """Get application stylesheet with proper sizing"""
-        # Use Cairo font for Arabic
-        font_family = "'Cairo', 'Segoe UI', sans-serif" if self.current_language == 'ar' else "'Segoe UI', sans-serif"
-        
         return f"""
             * {{
-                font-family: {font_family};
+                font-family: 'Segoe UI', sans-serif;
             }}
             
             QMainWindow {{
@@ -1252,7 +1222,6 @@ class AttenduxSyncAgent(QMainWindow):
             QGroupBox {{
                 font-weight: bold;
                 font-size: 13px;
-                font-family: {font_family};
                 border: 2px solid {BRAND_PRIMARY};
                 border-radius: 8px;
                 margin-top: 15px;
@@ -1283,7 +1252,6 @@ class AttenduxSyncAgent(QMainWindow):
                 border-radius: 8px;
                 font-weight: 600;
                 font-size: 13px;
-                font-family: {font_family};
                 min-width: 120px;
                 min-height: 42px;
             }}
@@ -1333,7 +1301,6 @@ class AttenduxSyncAgent(QMainWindow):
                 border-radius: 8px;
                 background: white;
                 font-size: 13px;
-                font-family: {font_family};
                 min-height: 42px;
             }}
             
@@ -1436,7 +1403,6 @@ class AttenduxSyncAgent(QMainWindow):
             
             QLabel {{
                 font-size: 13px;
-                font-family: {font_family};
             }}
         """
 
