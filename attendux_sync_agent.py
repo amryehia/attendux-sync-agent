@@ -62,11 +62,11 @@ SETTINGS_FILE = os.path.join(os.path.expanduser("~"), ".attendux_sync", "setting
 # Translations
 TRANSLATIONS = {
     'ar': {
-        'app_title': 'وكيل مزامنة أتندوكس',
+        'app_title': 'أتندوكس - وكيل المزامنة',
         'app_subtitle': 'مزامنة أجهزة البصمة متعددة المستأجرين',
         'version': 'الإصدار',
         'license_key': 'مفتاح الترخيص',
-        'license_placeholder': 'أدخل مفتاح الترخيص الخاص بك (ATX-XXXX-XXXX-XXXX-XXXX)',
+        'license_placeholder': 'أدخل مفتاح الترخيص الخاص بك',
         'connect': 'اتصال',
         'disconnect': 'قطع الاتصال',
         'company': 'الشركة',
@@ -93,14 +93,18 @@ TRANSLATIONS = {
         'sync_completed': 'اكتملت المزامنة',
         'language': 'اللغة',
         'arabic': 'العربية',
-        'english': 'English'
+        'english': 'الإنجليزية',
+        'back': 'رجوع',
+        'forward': 'التالي',
+        'refresh': 'تحديث',
+        'close': 'إغلاق'
     },
     'en': {
-        'app_title': 'Attendux Sync Agent',
+        'app_title': 'أتندوكس - وكيل المزامنة',
         'app_subtitle': 'Multi-Tenant ZKTeco Device Synchronization',
         'version': 'Version',
         'license_key': 'License Key',
-        'license_placeholder': 'Enter your license key (ATX-XXXX-XXXX-XXXX-XXXX)',
+        'license_placeholder': 'Enter your license key',
         'connect': 'Connect',
         'disconnect': 'Disconnect',
         'company': 'Company',
@@ -127,7 +131,11 @@ TRANSLATIONS = {
         'sync_completed': 'Sync Completed',
         'language': 'Language',
         'arabic': 'العربية',
-        'english': 'English'
+        'english': 'English',
+        'back': 'Back',
+        'forward': 'Forward',
+        'refresh': 'Refresh',
+        'close': 'Close'
     }
 }
 
@@ -793,101 +801,32 @@ class AttenduxSyncAgent(QMainWindow):
         self.connect_btn.setEnabled(True)
     
     def open_dashboard(self):
-        """Open Attendux dashboard in embedded browser"""
+        """Open Attendux dashboard in embedded browser - fullscreen without toolbar"""
         dashboard_url = "https://app.attendux.com"
         
         try:
             # Create dashboard window if not exists
             if not self.dashboard_browser or not self.dashboard_browser.isVisible():
                 self.dashboard_browser = QWidget()
-                self.dashboard_browser.setWindowTitle(self.tr('open_dashboard') + " - Attendux")
-                self.dashboard_browser.setMinimumSize(1200, 800)
+                self.dashboard_browser.setWindowTitle("أتندوكس - لوحة التحكم")
                 
-                # Center the browser window
+                # Make it fullscreen or maximized
                 screen = QApplication.desktop().screenGeometry()
-                self.dashboard_browser.setGeometry(
-                    (screen.width() - 1200) // 2,
-                    (screen.height() - 800) // 2,
-                    1200, 800
-                )
+                self.dashboard_browser.setGeometry(0, 0, screen.width(), screen.height())
+                self.dashboard_browser.showMaximized()  # Start maximized
                 
-                # Create layout
+                # Create layout with no margins for fullscreen
                 browser_layout = QVBoxLayout(self.dashboard_browser)
                 browser_layout.setContentsMargins(0, 0, 0, 0)
+                browser_layout.setSpacing(0)
                 
-                # Create web view
+                # Create web view - takes full window (no toolbar)
                 web_view = QWebEngineView()
                 web_view.setUrl(QUrl(dashboard_url))
                 browser_layout.addWidget(web_view)
                 
-                # Add toolbar for navigation
-                toolbar = QWidget()
-                toolbar_layout = QHBoxLayout(toolbar)
-                toolbar_layout.setContentsMargins(10, 5, 10, 5)
-                
-                # Back button
-                back_btn = QPushButton("◀ " + ("رجوع" if self.current_language == 'ar' else "Back"))
-                back_btn.clicked.connect(web_view.back)
-                back_btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: {BRAND_PRIMARY};
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        padding: 5px 15px;
-                        font-size: 12px;
-                    }}
-                    QPushButton:hover {{ background-color: {BRAND_PRIMARY_DARK}; }}
-                """)
-                toolbar_layout.addWidget(back_btn)
-                
-                # Forward button
-                forward_btn = QPushButton(("التالي" if self.current_language == 'ar' else "Forward") + " ▶")
-                forward_btn.clicked.connect(web_view.forward)
-                forward_btn.setStyleSheet(back_btn.styleSheet())
-                toolbar_layout.addWidget(forward_btn)
-                
-                # Refresh button
-                refresh_btn = QPushButton("🔄 " + ("تحديث" if self.current_language == 'ar' else "Refresh"))
-                refresh_btn.clicked.connect(web_view.reload)
-                refresh_btn.setStyleSheet(back_btn.styleSheet())
-                toolbar_layout.addWidget(refresh_btn)
-                
-                # URL bar
-                url_bar = QLineEdit(dashboard_url)
-                url_bar.setReadOnly(True)
-                url_bar.setStyleSheet("""
-                    QLineEdit {
-                        border: 1px solid #ddd;
-                        border-radius: 4px;
-                        padding: 5px 10px;
-                        font-size: 11px;
-                        background-color: #f9f9f9;
-                    }
-                """)
-                toolbar_layout.addWidget(url_bar, 1)
-                
-                # Close button
-                close_btn = QPushButton("✖ " + ("إغلاق" if self.current_language == 'ar' else "Close"))
-                close_btn.clicked.connect(self.dashboard_browser.close)
-                close_btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: {BRAND_DANGER};
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        padding: 5px 15px;
-                        font-size: 12px;
-                    }}
-                    QPushButton:hover {{ background-color: #dc2626; }}
-                """)
-                toolbar_layout.addWidget(close_btn)
-                
-                # Insert toolbar at top
-                browser_layout.insertWidget(0, toolbar)
-                
-                # Update URL bar when page changes
-                web_view.urlChanged.connect(lambda url: url_bar.setText(url.toString()))
+                # Store web_view reference for potential future use
+                self.dashboard_webview = web_view
             
             # Show the browser window
             self.dashboard_browser.show()
