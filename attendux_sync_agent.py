@@ -10,11 +10,22 @@ import sys
 import json
 import os
 import requests
+import platform
 from datetime import datetime
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtNetwork import *
+
+# Windows registry for startup (optional import)
+if platform.system() == 'Windows':
+    try:
+        import winreg as reg
+        WINDOWS_STARTUP_AVAILABLE = True
+    except ImportError:
+        WINDOWS_STARTUP_AVAILABLE = False
+else:
+    WINDOWS_STARTUP_AVAILABLE = False
 
 # Try to import ZK library, but make it optional for building
 try:
@@ -542,6 +553,10 @@ class AttenduxSyncAgent(QMainWindow):
     def auto_connect(self):
         """Auto-connect on startup"""
         self.connect_license()
+        
+        # If auto-sync was running before, resume it
+        if self.settings.get('auto_sync_was_running', False) and self.api:
+            QTimer.singleShot(2000, self.resume_auto_sync)
     
     def connect_license(self):
         """Connect to Attendux cloud"""
@@ -697,6 +712,10 @@ class AttenduxSyncAgent(QMainWindow):
             self.auto_sync_btn.setText("⏱ Start Auto-Sync")
             self.auto_sync_btn.setObjectName("primaryButton")
             self.log("⏸ Auto-sync stopped", "info")
+            
+            # Save state
+            self.settings['auto_sync_was_running'] = False
+            SettingsManager.save(self.settings)
         else:
             # Start auto-sync
             interval = self.interval_spinbox.value() * 60 * 1000  # Convert to milliseconds
@@ -705,18 +724,87 @@ class AttenduxSyncAgent(QMainWindow):
             self.auto_sync_btn.setObjectName("dangerButton")
             self.log(f"▶ Auto-sync started (every {self.interval_spinbox.value()} minutes)", "success")
             
+            # Save state
+            self.settings['auto_sync_was_running'] = True
+            SettingsManager.save(self.settings)
+            
             # Do immediate sync
             self.start_sync()
         
         # Refresh button style
         self.auto_sync_btn.setStyle(self.auto_sync_btn.style())
     
+    def resume_auto_sync(self):
+        """Resume auto-sync after app restart"""
+        if not self.sync_timer.isActive() and self.settings.get('auto_sync_was_running', False):
+            self.log("🔄 Resuming auto-sync from previous session...", "info")
+            self.toggle_auto_sync()
+    
     def save_settings(self):
         """Save settings to file"""
         self.settings['sync_interval'] = self.interval_spinbox.value()
-        self.settings['auto_start'] = self.auto_start_checkbox.isChecked()
+        
+        # Handle Windows startup
+        auto_start_enabled = self.auto_start_checkbox.isChecked()
+        if auto_start_enabled != self.settings.get('auto_start'):
+            if auto_start_enabled:
+                self.add_to_windows_startup()
+            else:
+                self.remove_from_windows_startup()
+        
+        self.settings['auto_start'] = auto_start_enabled
         self.settings['show_notifications'] = self.notifications_checkbox.isChecked()
         SettingsManager.save(self.settings)
+    
+    def add_to_windows_startup(self):
+        """Add application to Windows startup"""
+        if not WINDOWS_STARTUP_AVAILABLE:
+            self.log("⚠️ Windows startup not available on this system", "warning")
+            return
+        
+        try:
+            # Get executable path
+            if getattr(sys, 'frozen', False):
+                # Running as compiled .exe
+                exe_path = sys.executable
+            else:
+                # Running as script
+                exe_path = os.path.abspath(__file__)
+            
+            # Open Windows startup registry key
+            key = reg.HKEY_CURRENT_USER
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            
+            # Add entry
+            reg_key = reg.OpenKey(key, key_path, 0, reg.KEY_SET_VALUE)
+            reg.SetValueEx(reg_key, "AttenduxSyncAgent", 0, reg.REG_SZ, exe_path)
+            reg.CloseKey(reg_key)
+            
+            self.log("✅ Added to Windows startup", "success")
+        except Exception as e:
+            self.log(f"❌ Failed to add to startup: {str(e)}", "error")
+    
+    def remove_from_windows_startup(self):
+        """Remove application from Windows startup"""
+        if not WINDOWS_STARTUP_AVAILABLE:
+            return
+        
+        try:
+            # Open Windows startup registry key
+            key = reg.HKEY_CURRENT_USER
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            
+            # Remove entry
+            reg_key = reg.OpenKey(key, key_path, 0, reg.KEY_SET_VALUE)
+            try:
+                reg.DeleteValue(reg_key, "AttenduxSyncAgent")
+                self.log("✅ Removed from Windows startup", "success")
+            except FileNotFoundError:
+                pass  # Entry doesn't exist
+            reg.CloseKey(reg_key)
+            
+        except Exception as e:
+            self.log(f"❌ Failed to remove from startup: {str(e)}", "error")
     
     def log(self, message, level="info"):
         """Add log message"""
