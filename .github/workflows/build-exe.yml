@@ -46,16 +46,29 @@ jobs:
     
     - name: Build EXE with PyInstaller
       run: |
-        pyinstaller --onefile --windowed `
-          --name "Attendux-Sync-Agent" `
-          --add-data "logo.png;." `
-          --hidden-import PyQt5 `
-          --hidden-import PyQt5.QtCore `
-          --hidden-import PyQt5.QtGui `
-          --hidden-import PyQt5.QtWidgets `
-          --hidden-import zk `
-          --hidden-import requests `
-          attendux_sync_agent.py
+        if (Test-Path logo.png) {
+          pyinstaller --onefile --windowed `
+            --name "Attendux-Sync-Agent" `
+            --add-data "logo.png;." `
+            --hidden-import PyQt5 `
+            --hidden-import PyQt5.QtCore `
+            --hidden-import PyQt5.QtGui `
+            --hidden-import PyQt5.QtWidgets `
+            --hidden-import zk `
+            --hidden-import requests `
+            attendux_sync_agent.py
+        } else {
+          echo "Building without logo..."
+          pyinstaller --onefile --windowed `
+            --name "Attendux-Sync-Agent" `
+            --hidden-import PyQt5 `
+            --hidden-import PyQt5.QtCore `
+            --hidden-import PyQt5.QtGui `
+            --hidden-import PyQt5.QtWidgets `
+            --hidden-import zk `
+            --hidden-import requests `
+            attendux_sync_agent.py
+        }
       shell: powershell
     
     - name: Verify build
