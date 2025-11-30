@@ -152,6 +152,7 @@ jobs:
         pip install PyQt5
         pip install requests
         pip install python-dateutil
+        pip install Pillow
     
     - name: Try install pyzk (optional)
       run: |
