@@ -1,0 +1,128 @@
+name: Build Attendux Sync Agent
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+    
+    - name: Download Attendux logo
+      run: |
+        curl -o logo.png https://app.attendux.com/public/storage/logo.png
+      continue-on-error: true
+    
+    - name: Create icon (if logo exists)
+      run: |
+        if (Test-Path logo.png) {
+          echo "Logo downloaded successfully"
+        } else {
+          echo "Logo download failed, building without logo"
+        }
+      shell: powershell
+    
+    - name: Build EXE with PyInstaller
+      run: |
+        pyinstaller --onefile --windowed `
+          --name "Attendux-Sync-Agent" `
+          --add-data "logo.png;." `
+          --hidden-import PyQt5 `
+          --hidden-import PyQt5.QtCore `
+          --hidden-import PyQt5.QtGui `
+          --hidden-import PyQt5.QtWidgets `
+          --hidden-import zk `
+          --hidden-import requests `
+          attendux_sync_agent.py
+      shell: powershell
+    
+    - name: Verify build
+      run: |
+        if (Test-Path dist/Attendux-Sync-Agent.exe) {
+          echo "✅ Build successful!"
+          $size = (Get-Item dist/Attendux-Sync-Agent.exe).length / 1MB
+          echo "📦 EXE size: $size MB"
+        } else {
+          echo "❌ Build failed!"
+          exit 1
+        }
+      shell: powershell
+    
+    - name: Upload EXE artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Attendux-Sync-Agent-Windows
+        path: dist/Attendux-Sync-Agent.exe
+        retention-days: 90
+    
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/Attendux-Sync-Agent.exe
+        body: |
+          ## Attendux Sync Agent ${{ github.ref_name }}
+          
+          ### Download
+          - **Windows 10/11 (64-bit):** Attendux-Sync-Agent.exe
+          
+          ### Installation
+          1. Download the .exe file
+          2. Double-click to run (no installation needed)
+          3. Enter your license key
+          4. Click "Connect" and "Start Auto-Sync"
+          
+          ### Requirements
+          - Windows 10 or Windows 11 (64-bit)
+          - Internet connection
+          - Same network as ZKTeco devices
+          
+          ### What's New
+          - Multi-tenant support
+          - Attendux brand colors and logo
+          - Auto-sync every 15 minutes
+          - System tray support
+          - Activity logs
+          
+          ### Support
+          - Email: support@attendux.com
+          - Documentation: [README.md](README.md)
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build Summary
+      run: |
+        echo "### ✅ Build Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Output:** dist/Attendux-Sync-Agent.exe" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Download:** Go to Actions → Click this workflow → Scroll to Artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if ('${{ github.ref }}' -like 'refs/tags/v*') {
+          echo "**Release:** Check [Releases](../../releases) page" >> $GITHUB_STEP_SUMMARY
+        }
+      shell: powershell

@@ -1,0 +1,23 @@
+# Attendux Sync Agent Requirements
+# Python 3.8 or higher required
+
+# GUI Framework
+PyQt5==5.15.9
+PyQt5-Qt5==5.15.2
+PyQt5-sip==12.12.2
+
+# HTTP Requests
+requests==2.31.0
+urllib3==2.0.7
+
+# ZKTeco Device Communication
+pyzk==0.9
+
+# Date/Time handling
+python-dateutil==2.8.2
+
+# For building executable
+pyinstaller==6.3.0
+
+# Optional: For better icons
+Pillow==10.1.0
