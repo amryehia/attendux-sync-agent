@@ -62,7 +62,7 @@ SETTINGS_FILE = os.path.join(os.path.expanduser("~"), ".attendux_sync", "setting
 # Translations
 TRANSLATIONS = {
     'ar': {
-        'app_title': 'أتندوكس - وكيل المزامنة',
+        'app_title': 'أتندوكس',
         'app_subtitle': 'مزامنة أجهزة البصمة متعددة المستأجرين',
         'version': 'الإصدار',
         'license_key': 'مفتاح الترخيص',
@@ -97,10 +97,27 @@ TRANSLATIONS = {
         'back': 'رجوع',
         'forward': 'التالي',
         'refresh': 'تحديث',
-        'close': 'إغلاق'
+        'close': 'إغلاق',
+        'not_connected': 'غير متصل',
+        'last_sync_never': 'آخر مزامنة: أبداً',
+        'last_sync': 'آخر مزامنة',
+        'license_configuration': 'إعدادات الترخيص',
+        'devices_cloud': 'الأجهزة (محملة من السحابة)',
+        'refresh_from_cloud': '↻ تحديث من السحابة',
+        'sync_now': '▶ مزامنة الآن',
+        'start_auto_sync': '⏱ بدء المزامنة التلقائية',
+        'stop_auto_sync': '⏹ إيقاف المزامنة التلقائية',
+        'activity_logs': 'سجل النشاط',
+        'show': 'عرض',
+        'quit': 'خروج',
+        'connected': 'متصل',
+        'minutes': 'دقائق',
+        'company_label': 'الشركة',
+        'plan_label': 'الخطة',
+        'license_expires': 'انتهاء الترخيص'
     },
     'en': {
-        'app_title': 'أتندوكس - وكيل المزامنة',
+        'app_title': 'Attendux',
         'app_subtitle': 'Multi-Tenant ZKTeco Device Synchronization',
         'version': 'Version',
         'license_key': 'License Key',
@@ -135,7 +152,24 @@ TRANSLATIONS = {
         'back': 'Back',
         'forward': 'Forward',
         'refresh': 'Refresh',
-        'close': 'Close'
+        'close': 'Close',
+        'not_connected': 'Not Connected',
+        'last_sync_never': 'Last sync: Never',
+        'last_sync': 'Last sync',
+        'license_configuration': 'License Configuration',
+        'devices_cloud': 'Devices (Loaded from Cloud)',
+        'refresh_from_cloud': '↻ Refresh from Cloud',
+        'sync_now': '▶ Sync Now',
+        'start_auto_sync': '⏱ Start Auto-Sync',
+        'stop_auto_sync': '⏹ Stop Auto-Sync',
+        'activity_logs': 'Activity Logs',
+        'show': 'Show',
+        'quit': 'Quit',
+        'connected': 'Connected',
+        'minutes': 'minutes',
+        'company_label': 'Company',
+        'plan_label': 'Plan',
+        'license_expires': 'License Expires'
     }
 }
 
@@ -368,8 +402,16 @@ class AttenduxSyncAgent(QMainWindow):
         # Set layout direction for RTL languages
         if lang_code == 'ar':
             QApplication.setLayoutDirection(Qt.RightToLeft)
+            # Set Cairo font for Arabic
+            app_font = QFont("Cairo", 10)
+            if not app_font.exactMatch():
+                app_font = QFont("Segoe UI", 10)
+            QApplication.setFont(app_font)
         else:
             QApplication.setLayoutDirection(Qt.LeftToRight)
+            # Reset to default font for English
+            app_font = QFont("Segoe UI", 10)
+            QApplication.setFont(app_font)
         
         self.update_ui_language()
         self.log(f"🌐 Language switched to: {lang_code}", "info")
@@ -380,42 +422,70 @@ class AttenduxSyncAgent(QMainWindow):
         # Update all translatable UI elements
         if hasattr(self, 'subtitle_label'):
             self.subtitle_label.setText(self.tr('app_subtitle'))
+        if hasattr(self, 'status_label') and self.tr('not_connected') in self.status_label.text():
+            self.status_label.setText(self.tr('not_connected'))
+        if hasattr(self, 'last_sync_label') and self.tr('last_sync_never') in self.last_sync_label.text():
+            self.last_sync_label.setText(self.tr('last_sync_never'))
+        if hasattr(self, 'license_group'):
+            self.license_group.setTitle(self.tr('license_configuration'))
         if hasattr(self, 'license_label'):
             self.license_label.setText(self.tr('license_key') + ":")
         if hasattr(self, 'license_input'):
             self.license_input.setPlaceholderText(self.tr('license_placeholder'))
         if hasattr(self, 'connect_btn'):
             self.connect_btn.setText(self.tr('connect'))
+        if hasattr(self, 'devices_group'):
+            self.devices_group.setTitle(self.tr('devices_cloud'))
+        if hasattr(self, 'refresh_devices_btn'):
+            self.refresh_devices_btn.setText(self.tr('refresh_from_cloud'))
         if hasattr(self, 'dashboard_btn'):
             self.dashboard_btn.setText(self.tr('open_dashboard'))
+        if hasattr(self, 'sync_now_btn'):
+            self.sync_now_btn.setText(self.tr('sync_now'))
         if hasattr(self, 'start_sync_btn'):
-            self.start_sync_btn.setText(self.tr('start_sync'))
+            current_text = self.start_sync_btn.text()
+            if self.tr('start_auto_sync') in current_text or 'Start' in current_text:
+                self.start_sync_btn.setText(self.tr('start_auto_sync'))
+            else:
+                self.start_sync_btn.setText(self.tr('stop_auto_sync'))
         if hasattr(self, 'settings_group'):
             self.settings_group.setTitle(self.tr('settings'))
-        if hasattr(self, 'logs_group'):
-            self.logs_group.setTitle(self.tr('logs'))
-        if hasattr(self, 'auto_sync_checkbox'):
-            self.auto_sync_checkbox.setText(self.tr('auto_sync'))
+        if hasattr(self, 'sync_interval_label'):
+            self.sync_interval_label.setText(self.tr('sync_interval') + ":")
+        if hasattr(self, 'interval_spinbox'):
+            self.interval_spinbox.setSuffix(" " + self.tr('minutes'))
         if hasattr(self, 'startup_checkbox'):
             self.startup_checkbox.setText(self.tr('startup'))
         if hasattr(self, 'notifications_checkbox'):
             self.notifications_checkbox.setText(self.tr('notifications'))
+        if hasattr(self, 'logs_group'):
+            self.logs_group.setTitle(self.tr('activity_logs'))
         if hasattr(self, 'clear_logs_btn'):
             self.clear_logs_btn.setText(self.tr('clear_logs'))
     
     def init_ui(self):
         """Initialize UI"""
-        self.setWindowTitle('Attendux Sync Agent')
-        self.setMinimumSize(900, 700)
+        self.setWindowTitle(self.tr('app_title'))
+        self.setMinimumSize(1100, 800)
+        
+        # Set Cairo font for Arabic
+        if self.current_language == 'ar':
+            app_font = QFont("Cairo", 10)
+            if not app_font.exactMatch():
+                # Fallback to other Arabic fonts if Cairo not available
+                app_font = QFont("Segoe UI", 10)
+            QApplication.setFont(app_font)
+        
         self.setStyleSheet(self.get_stylesheet())
         
-        # Center window
+        # Start maximized for better display
         screen = QApplication.desktop().screenGeometry()
         self.setGeometry(
-            (screen.width() - 900) // 2,
-            (screen.height() - 700) // 2,
-            900, 700
+            (screen.width() - 1100) // 2,
+            (screen.height() - 800) // 2,
+            1100, 800
         )
+        self.showMaximized()  # Start maximized to avoid cropped fields
         
         # Create central widget
         central_widget = QWidget()
@@ -464,9 +534,11 @@ class AttenduxSyncAgent(QMainWindow):
         title_layout = QVBoxLayout()
         self.title_label = QLabel(self.tr('app_title'))
         self.title_label.setObjectName("title")
-        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: " + BRAND_PRIMARY_DARK)
+        title_font = "font-family: 'Cairo', sans-serif;" if self.current_language == 'ar' else ""
+        self.title_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {BRAND_PRIMARY_DARK}; {title_font}")
         self.subtitle_label = QLabel(self.tr('app_subtitle'))
-        self.subtitle_label.setStyleSheet("font-size: 12px; color: #666;")
+        subtitle_font = "font-family: 'Cairo', sans-serif;" if self.current_language == 'ar' else ""
+        self.subtitle_label.setStyleSheet(f"font-size: 12px; color: #666; {subtitle_font}")
         title_layout.addWidget(self.title_label)
         title_layout.addWidget(self.subtitle_label)
         header_layout.addLayout(title_layout)
@@ -522,14 +594,14 @@ class AttenduxSyncAgent(QMainWindow):
         status_layout.addWidget(self.status_indicator)
         
         # Status text
-        self.status_label = QLabel("Not Connected")
+        self.status_label = QLabel(self.tr('not_connected'))
         self.status_label.setStyleSheet("font-size: 16px; font-weight: 600;")
         status_layout.addWidget(self.status_label)
         
         status_layout.addStretch()
         
         # Last sync time
-        self.last_sync_label = QLabel("Last sync: Never")
+        self.last_sync_label = QLabel(self.tr('last_sync_never'))
         self.last_sync_label.setStyleSheet("color: #666; font-size: 12px;")
         status_layout.addWidget(self.last_sync_label)
         
@@ -537,19 +609,20 @@ class AttenduxSyncAgent(QMainWindow):
     
     def create_license_section(self, layout):
         """Create license input section"""
-        license_group = QGroupBox("License Configuration")
+        self.license_group = QGroupBox(self.tr('license_configuration'))
         license_layout = QVBoxLayout()
         
         # License key input
         key_layout = QHBoxLayout()
-        key_layout.addWidget(QLabel("License Key:"))
+        self.license_label = QLabel(self.tr('license_key') + ":")
+        key_layout.addWidget(self.license_label)
         
         self.license_input = QLineEdit()
-        self.license_input.setPlaceholderText("ATX-XXXX-XXXX-XXXX-XXXX")
+        self.license_input.setPlaceholderText(self.tr('license_placeholder'))
         self.license_input.setText(self.settings.get('license_key', ''))
         key_layout.addWidget(self.license_input)
         
-        self.connect_btn = QPushButton("Connect")
+        self.connect_btn = QPushButton(self.tr('connect'))
         self.connect_btn.setObjectName("primaryButton")
         self.connect_btn.clicked.connect(self.connect_license)
         key_layout.addWidget(self.connect_btn)
@@ -572,12 +645,12 @@ class AttenduxSyncAgent(QMainWindow):
         self.company_info_widget.setVisible(False)
         license_layout.addWidget(self.company_info_widget)
         
-        license_group.setLayout(license_layout)
-        layout.addWidget(license_group)
+        self.license_group.setLayout(license_layout)
+        layout.addWidget(self.license_group)
     
     def create_devices_section(self, layout):
         """Create devices list section"""
-        devices_group = QGroupBox("Devices (Loaded from Cloud)")
+        self.devices_group = QGroupBox(self.tr('devices_cloud'))
         devices_layout = QVBoxLayout()
         
         # Devices list
@@ -588,7 +661,7 @@ class AttenduxSyncAgent(QMainWindow):
         # Device buttons
         device_buttons = QHBoxLayout()
         
-        self.refresh_devices_btn = QPushButton("↻ Refresh from Cloud")
+        self.refresh_devices_btn = QPushButton(self.tr('refresh_from_cloud'))
         self.refresh_devices_btn.clicked.connect(self.load_company_devices)
         self.refresh_devices_btn.setEnabled(False)
         device_buttons.addWidget(self.refresh_devices_btn)
@@ -597,8 +670,8 @@ class AttenduxSyncAgent(QMainWindow):
         
         devices_layout.addLayout(device_buttons)
         
-        devices_group.setLayout(devices_layout)
-        layout.addWidget(devices_group)
+        self.devices_group.setLayout(devices_layout)
+        layout.addWidget(self.devices_group)
     
     def create_control_buttons(self, layout):
         """Create sync control buttons"""
@@ -606,22 +679,22 @@ class AttenduxSyncAgent(QMainWindow):
         control_layout = QHBoxLayout(control_widget)
         
         # Dashboard button
-        self.dashboard_btn = QPushButton("🌐 Open Dashboard")
+        self.dashboard_btn = QPushButton(self.tr('open_dashboard'))
         self.dashboard_btn.setObjectName("primaryButton")
         self.dashboard_btn.clicked.connect(self.open_dashboard)
         control_layout.addWidget(self.dashboard_btn)
         
-        self.sync_now_btn = QPushButton("▶ Sync Now")
+        self.sync_now_btn = QPushButton(self.tr('sync_now'))
         self.sync_now_btn.setObjectName("successButton")
         self.sync_now_btn.clicked.connect(self.start_sync)
         self.sync_now_btn.setEnabled(False)
         control_layout.addWidget(self.sync_now_btn)
         
-        self.auto_sync_btn = QPushButton("⏱ Start Auto-Sync")
-        self.auto_sync_btn.setObjectName("primaryButton")
-        self.auto_sync_btn.clicked.connect(self.toggle_auto_sync)
-        self.auto_sync_btn.setEnabled(False)
-        control_layout.addWidget(self.auto_sync_btn)
+        self.start_sync_btn = QPushButton(self.tr('start_auto_sync'))
+        self.start_sync_btn.setObjectName("primaryButton")
+        self.start_sync_btn.clicked.connect(self.toggle_auto_sync)
+        self.start_sync_btn.setEnabled(False)
+        control_layout.addWidget(self.start_sync_btn)
         
         control_layout.addStretch()
         
@@ -629,37 +702,38 @@ class AttenduxSyncAgent(QMainWindow):
     
     def create_settings_section(self, layout):
         """Create settings section"""
-        settings_group = QGroupBox("Settings")
+        self.settings_group = QGroupBox(self.tr('settings'))
         settings_layout = QHBoxLayout()
         
-        settings_layout.addWidget(QLabel("Sync Interval:"))
+        self.sync_interval_label = QLabel(self.tr('sync_interval') + ":")
+        settings_layout.addWidget(self.sync_interval_label)
         
         self.interval_spinbox = QSpinBox()
         self.interval_spinbox.setMinimum(5)
         self.interval_spinbox.setMaximum(120)
         self.interval_spinbox.setValue(self.settings.get('sync_interval', 15))
-        self.interval_spinbox.setSuffix(" minutes")
+        self.interval_spinbox.setSuffix(" " + self.tr('minutes'))
         self.interval_spinbox.valueChanged.connect(self.save_settings)
         settings_layout.addWidget(self.interval_spinbox)
         
-        self.auto_start_checkbox = QCheckBox("Start with Windows")
-        self.auto_start_checkbox.setChecked(self.settings.get('auto_start', True))
-        self.auto_start_checkbox.stateChanged.connect(self.save_settings)
-        settings_layout.addWidget(self.auto_start_checkbox)
+        self.startup_checkbox = QCheckBox(self.tr('startup'))
+        self.startup_checkbox.setChecked(self.settings.get('auto_start', True))
+        self.startup_checkbox.stateChanged.connect(self.save_settings)
+        settings_layout.addWidget(self.startup_checkbox)
         
-        self.notifications_checkbox = QCheckBox("Show Notifications")
+        self.notifications_checkbox = QCheckBox(self.tr('notifications'))
         self.notifications_checkbox.setChecked(self.settings.get('show_notifications', True))
         self.notifications_checkbox.stateChanged.connect(self.save_settings)
         settings_layout.addWidget(self.notifications_checkbox)
         
         settings_layout.addStretch()
         
-        settings_group.setLayout(settings_layout)
-        layout.addWidget(settings_group)
+        self.settings_group.setLayout(settings_layout)
+        layout.addWidget(self.settings_group)
     
     def create_logs_section(self, layout):
         """Create logs display"""
-        logs_group = QGroupBox("Activity Logs")
+        self.logs_group = QGroupBox(self.tr('activity_logs'))
         logs_layout = QVBoxLayout()
         
         self.log_text = QTextEdit()
@@ -668,12 +742,12 @@ class AttenduxSyncAgent(QMainWindow):
         logs_layout.addWidget(self.log_text)
         
         # Clear logs button
-        clear_logs_btn = QPushButton("Clear Logs")
-        clear_logs_btn.clicked.connect(self.log_text.clear)
-        logs_layout.addWidget(clear_logs_btn)
+        self.clear_logs_btn = QPushButton(self.tr('clear_logs'))
+        self.clear_logs_btn.clicked.connect(self.log_text.clear)
+        logs_layout.addWidget(self.clear_logs_btn)
         
-        logs_group.setLayout(logs_layout)
-        layout.addWidget(logs_group)
+        self.logs_group.setLayout(logs_layout)
+        layout.addWidget(self.logs_group)
     
     def create_system_tray(self):
         """Create system tray icon"""
@@ -683,23 +757,23 @@ class AttenduxSyncAgent(QMainWindow):
         # Tray menu
         tray_menu = QMenu()
         
-        show_action = QAction("Show", self)
+        show_action = QAction(self.tr('show'), self)
         show_action.triggered.connect(self.show)
         tray_menu.addAction(show_action)
         
-        dashboard_action = QAction("Open Dashboard", self)
+        dashboard_action = QAction(self.tr('open_dashboard'), self)
         dashboard_action.triggered.connect(self.open_dashboard)
         tray_menu.addAction(dashboard_action)
         
         tray_menu.addSeparator()
         
-        sync_action = QAction("Sync Now", self)
+        sync_action = QAction(self.tr('sync_now'), self)
         sync_action.triggered.connect(self.start_sync)
         tray_menu.addAction(sync_action)
         
         tray_menu.addSeparator()
         
-        quit_action = QAction("Quit", self)
+        quit_action = QAction(self.tr('quit'), self)
         quit_action.triggered.connect(self.quit_app)
         tray_menu.addAction(quit_action)
         
@@ -769,20 +843,20 @@ class AttenduxSyncAgent(QMainWindow):
             
             # Update UI
             self.status_indicator.setStyleSheet(f"color: {BRAND_SUCCESS}; font-size: 24px;")
-            self.status_label.setText(f"✅ Connected - {self.company_info.get('name', 'Unknown')}")
+            self.status_label.setText(f"✅ {self.tr('connected')} - {self.company_info.get('name', 'Unknown')}")
             
             # Show company info
-            self.company_name_label.setText(f"Company: {self.company_info.get('name', 'N/A')}")
-            self.company_plan_label.setText(f"Plan: {self.company_info.get('plan', 'N/A')}")
+            self.company_name_label.setText(f"{self.tr('company_label')}: {self.company_info.get('name', 'N/A')}")
+            self.company_plan_label.setText(f"{self.tr('plan_label')}: {self.company_info.get('plan', 'N/A')}")
             
             expiry = self.company_info.get('license_expiry', 'N/A')
-            self.company_expiry_label.setText(f"License Expires: {expiry}")
+            self.company_expiry_label.setText(f"{self.tr('license_expires')}: {expiry}")
             self.company_info_widget.setVisible(True)
             
             # Enable controls
             self.refresh_devices_btn.setEnabled(True)
             self.sync_now_btn.setEnabled(True)
-            self.auto_sync_btn.setEnabled(True)
+            self.start_sync_btn.setEnabled(True)
             
             # Save license key
             self.settings['license_key'] = license_key
@@ -899,7 +973,7 @@ class AttenduxSyncAgent(QMainWindow):
         self.settings['last_sync'] = result['timestamp']
         self.save_settings()
         
-        self.last_sync_label.setText(f"Last sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.last_sync_label.setText(f"{self.tr('last_sync')}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Re-enable buttons
         self.sync_now_btn.setEnabled(True)
@@ -926,8 +1000,8 @@ class AttenduxSyncAgent(QMainWindow):
         if self.sync_timer.isActive():
             # Stop auto-sync
             self.sync_timer.stop()
-            self.auto_sync_btn.setText("⏱ Start Auto-Sync")
-            self.auto_sync_btn.setObjectName("primaryButton")
+            self.start_sync_btn.setText(self.tr('start_auto_sync'))
+            self.start_sync_btn.setObjectName("primaryButton")
             self.log("⏸ Auto-sync stopped", "info")
             
             # Save state
@@ -937,8 +1011,8 @@ class AttenduxSyncAgent(QMainWindow):
             # Start auto-sync
             interval = self.interval_spinbox.value() * 60 * 1000  # Convert to milliseconds
             self.sync_timer.start(interval)
-            self.auto_sync_btn.setText("⏹ Stop Auto-Sync")
-            self.auto_sync_btn.setObjectName("dangerButton")
+            self.start_sync_btn.setText(self.tr('stop_auto_sync'))
+            self.start_sync_btn.setObjectName("dangerButton")
             self.log(f"▶ Auto-sync started (every {self.interval_spinbox.value()} minutes)", "success")
             
             # Save state
@@ -949,7 +1023,7 @@ class AttenduxSyncAgent(QMainWindow):
             self.start_sync()
         
         # Refresh button style
-        self.auto_sync_btn.setStyle(self.auto_sync_btn.style())
+        self.start_sync_btn.setStyle(self.start_sync_btn.style())
     
     def resume_auto_sync(self):
         """Resume auto-sync after app restart"""
@@ -1154,7 +1228,14 @@ class AttenduxSyncAgent(QMainWindow):
     
     def get_stylesheet(self):
         """Get application stylesheet with proper sizing"""
+        # Use Cairo font for Arabic
+        font_family = "'Cairo', 'Segoe UI', sans-serif" if self.current_language == 'ar' else "'Segoe UI', sans-serif"
+        
         return f"""
+            * {{
+                font-family: {font_family};
+            }}
+            
             QMainWindow {{
                 background-color: {BRAND_GRAY_100};
             }}
@@ -1162,6 +1243,7 @@ class AttenduxSyncAgent(QMainWindow):
             QGroupBox {{
                 font-weight: bold;
                 font-size: 13px;
+                font-family: {font_family};
                 border: 2px solid {BRAND_PRIMARY};
                 border-radius: 8px;
                 margin-top: 15px;
@@ -1192,6 +1274,7 @@ class AttenduxSyncAgent(QMainWindow):
                 border-radius: 8px;
                 font-weight: 600;
                 font-size: 13px;
+                font-family: {font_family};
                 min-width: 120px;
                 min-height: 42px;
             }}
@@ -1241,6 +1324,7 @@ class AttenduxSyncAgent(QMainWindow):
                 border-radius: 8px;
                 background: white;
                 font-size: 13px;
+                font-family: {font_family};
                 min-height: 42px;
             }}
             
@@ -1343,6 +1427,7 @@ class AttenduxSyncAgent(QMainWindow):
             
             QLabel {{
                 font-size: 13px;
+                font-family: {font_family};
             }}
         """
 
