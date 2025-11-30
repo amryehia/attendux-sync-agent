@@ -17,8 +17,10 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtNetwork import *
 
-# Windows registry for startup (optional import)
-if platform.system() == 'Windows':
+# Platform-specific startup imports
+PLATFORM = platform.system()
+
+if PLATFORM == 'Windows':
     try:
         import winreg as reg
         WINDOWS_STARTUP_AVAILABLE = True
@@ -26,6 +28,9 @@ if platform.system() == 'Windows':
         WINDOWS_STARTUP_AVAILABLE = False
 else:
     WINDOWS_STARTUP_AVAILABLE = False
+
+# macOS uses plist files for login items
+MACOS_STARTUP_AVAILABLE = (PLATFORM == 'Darwin')
 
 # Try to import ZK library, but make it optional for building
 try:
@@ -744,31 +749,44 @@ class AttenduxSyncAgent(QMainWindow):
         """Save settings to file"""
         self.settings['sync_interval'] = self.interval_spinbox.value()
         
-        # Handle Windows startup
+        # Handle startup (Windows or macOS)
         auto_start_enabled = self.auto_start_checkbox.isChecked()
         if auto_start_enabled != self.settings.get('auto_start'):
             if auto_start_enabled:
-                self.add_to_windows_startup()
+                self.add_to_startup()
             else:
-                self.remove_from_windows_startup()
+                self.remove_from_startup()
         
         self.settings['auto_start'] = auto_start_enabled
         self.settings['show_notifications'] = self.notifications_checkbox.isChecked()
         SettingsManager.save(self.settings)
     
+    def add_to_startup(self):
+        """Add application to system startup (Windows or macOS)"""
+        if PLATFORM == 'Windows':
+            self.add_to_windows_startup()
+        elif PLATFORM == 'Darwin':
+            self.add_to_macos_startup()
+        else:
+            self.log("⚠️ Auto-startup not supported on this platform", "warning")
+    
+    def remove_from_startup(self):
+        """Remove application from system startup"""
+        if PLATFORM == 'Windows':
+            self.remove_from_windows_startup()
+        elif PLATFORM == 'Darwin':
+            self.remove_from_macos_startup()
+    
     def add_to_windows_startup(self):
         """Add application to Windows startup"""
         if not WINDOWS_STARTUP_AVAILABLE:
-            self.log("⚠️ Windows startup not available on this system", "warning")
             return
         
         try:
             # Get executable path
             if getattr(sys, 'frozen', False):
-                # Running as compiled .exe
                 exe_path = sys.executable
             else:
-                # Running as script
                 exe_path = os.path.abspath(__file__)
             
             # Open Windows startup registry key
@@ -790,21 +808,81 @@ class AttenduxSyncAgent(QMainWindow):
             return
         
         try:
-            # Open Windows startup registry key
             key = reg.HKEY_CURRENT_USER
             key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
             
-            # Remove entry
             reg_key = reg.OpenKey(key, key_path, 0, reg.KEY_SET_VALUE)
             try:
                 reg.DeleteValue(reg_key, "AttenduxSyncAgent")
                 self.log("✅ Removed from Windows startup", "success")
             except FileNotFoundError:
-                pass  # Entry doesn't exist
+                pass
             reg.CloseKey(reg_key)
-            
         except Exception as e:
             self.log(f"❌ Failed to remove from startup: {str(e)}", "error")
+    
+    def add_to_macos_startup(self):
+        """Add application to macOS login items"""
+        if not MACOS_STARTUP_AVAILABLE:
+            return
+        
+        try:
+            # Get app path
+            if getattr(sys, 'frozen', False):
+                # Running as .app bundle
+                app_path = sys.executable
+                # Go up to .app bundle
+                while not app_path.endswith('.app'):
+                    app_path = os.path.dirname(app_path)
+                    if app_path == '/' or app_path == '':
+                        app_path = sys.executable
+                        break
+            else:
+                app_path = os.path.abspath(__file__)
+            
+            # Create LaunchAgent plist
+            plist_dir = os.path.expanduser('~/Library/LaunchAgents')
+            os.makedirs(plist_dir, exist_ok=True)
+            
+            plist_path = os.path.join(plist_dir, 'com.attendux.syncagent.plist')
+            
+            plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.attendux.syncagent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>open</string>
+        <string>{app_path}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>"""
+            
+            with open(plist_path, 'w') as f:
+                f.write(plist_content)
+            
+            self.log("✅ Added to macOS login items", "success")
+        except Exception as e:
+            self.log(f"❌ Failed to add to login items: {str(e)}", "error")
+    
+    def remove_from_macos_startup(self):
+        """Remove application from macOS login items"""
+        if not MACOS_STARTUP_AVAILABLE:
+            return
+        
+        try:
+            plist_path = os.path.expanduser('~/Library/LaunchAgents/com.attendux.syncagent.plist')
+            if os.path.exists(plist_path):
+                os.remove(plist_path)
+                self.log("✅ Removed from macOS login items", "success")
+        except Exception as e:
+            self.log(f"❌ Failed to remove from login items: {str(e)}", "error")
     
     def log(self, message, level="info"):
         """Add log message"""
