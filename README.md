@@ -347,6 +347,51 @@ Windows: C:\Users\<username>\.attendux_sync\settings.json
 
 ## 🔍 Troubleshooting
 
+### Problem 0: macOS App Won't Open (NEW)
+**Symptom:**
+```
+App bounces in dock then closes
+OR
+"Attendux Sync Agent is damaged and can't be opened"
+OR
+App doesn't respond when double-clicked
+```
+
+**Solution - Method 1: Use the Helper Script (Easiest)**
+1. After extracting the .app, you'll see `INSTALL_ON_MAC.command`
+2. Double-click `INSTALL_ON_MAC.command`
+3. Follow the on-screen instructions
+4. Then double-click `Attendux Sync Agent.app`
+
+**Solution - Method 2: Right-Click Open**
+1. Right-click (or Control+Click) on `Attendux Sync Agent.app`
+2. Select "Open" from the context menu
+3. Click "Open" in the security dialog that appears
+4. App will now open normally
+
+**Solution - Method 3: Terminal Command**
+1. Open Terminal (Applications → Utilities → Terminal)
+2. Navigate to where you extracted the app:
+   ```bash
+   cd ~/Downloads  # or wherever you extracted it
+   ```
+3. Remove quarantine attribute:
+   ```bash
+   xattr -cr "Attendux Sync Agent.app"
+   ```
+4. Double-click the app normally
+
+**Solution - Method 4: System Preferences**
+1. Try to open the app (it will fail)
+2. Go to System Preferences → Security & Privacy
+3. Click "Open Anyway" button
+4. Click "Open" in the confirmation dialog
+
+**Why this happens:**
+macOS blocks apps downloaded from the internet that aren't signed with an Apple Developer certificate. This is a security feature called "Gatekeeper". The methods above tell macOS that you trust this app.
+
+---
+
 ### Problem 1: Can't Connect to Device
 **Symptom:**
 ```

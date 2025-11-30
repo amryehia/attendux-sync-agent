@@ -172,6 +172,33 @@ jobs:
           pyinstaller --onefile --windowed --name "Attendux Sync Agent" attendux_sync_agent.py
         fi
     
+    - name: Remove quarantine attribute (for easier opening)
+      run: |
+        if [ -d "dist/Attendux Sync Agent.app" ]; then
+          xattr -cr "dist/Attendux Sync Agent.app" || echo "Could not remove quarantine"
+        fi
+      continue-on-error: true
+    
+    - name: Create installation helper script
+      run: |
+        cat > "dist/INSTALL_ON_MAC.command" << 'EOF'
+        #!/bin/bash
+        echo "=========================================="
+        echo "Attendux Sync Agent - macOS Installation"
+        echo "=========================================="
+        echo ""
+        echo "Removing quarantine attribute..."
+        xattr -cr "Attendux Sync Agent.app"
+        echo "✓ Done!"
+        echo ""
+        echo "The app is now ready to use."
+        echo "You can close this window and double-click 'Attendux Sync Agent.app'"
+        echo ""
+        read -p "Press Enter to exit..."
+        EOF
+        chmod +x "dist/INSTALL_ON_MAC.command"
+      continue-on-error: true
+    
     - name: Verify build
       run: |
         if [ -d "dist/Attendux Sync Agent.app" ]; then
@@ -188,6 +215,34 @@ jobs:
         # Create a simple .dmg for distribution
         mkdir -p dist/dmg
         cp -r "dist/Attendux Sync Agent.app" dist/dmg/
+        cp "dist/INSTALL_ON_MAC.command" dist/dmg/ 2>/dev/null || true
+        
+        # Create README in DMG
+        cat > "dist/dmg/README.txt" << 'EOF'
+        Attendux Sync Agent - macOS Installation
+        ==========================================
+
+        If the app doesn't open:
+        
+        Method 1: Use the helper script
+        --------------------------------
+        1. Double-click "INSTALL_ON_MAC.command"
+        2. Then double-click "Attendux Sync Agent.app"
+        
+        Method 2: Manual fix
+        --------------------
+        1. Right-click "Attendux Sync Agent.app"
+        2. Select "Open" from the menu
+        3. Click "Open" in the security dialog
+        
+        Method 3: Terminal command
+        --------------------------
+        Open Terminal and run:
+        xattr -cr "Attendux Sync Agent.app"
+        
+        Then double-click the app normally.
+        EOF
+        
         hdiutil create -volname "Attendux Sync Agent" -srcfolder dist/dmg -ov -format UDZO "dist/Attendux-Sync-Agent-macOS.dmg"
         echo "DMG created successfully"
       continue-on-error: true
