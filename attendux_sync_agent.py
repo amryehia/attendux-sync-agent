@@ -395,18 +395,23 @@ class AttenduxSyncAgent(QMainWindow):
     
     def switch_language(self, lang_code):
         """Switch application language"""
+        # Save the language first
         self.current_language = lang_code
         self.settings['language'] = lang_code
-        self.save_settings()
+        SettingsManager.save(self.settings)
         
-        # Set layout direction for RTL languages
+        # Show message that user needs to restart manually
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information)
         if lang_code == 'ar':
-            QApplication.setLayoutDirection(Qt.RightToLeft)
+            msg.setWindowTitle("تم حفظ اللغة")
+            msg.setText("تم حفظ تفضيل اللغة بنجاح.")
+            msg.setInformativeText("الرجاء إعادة تشغيل التطبيق يدوياً لتطبيق التغيير.")
         else:
-            QApplication.setLayoutDirection(Qt.LeftToRight)
-        
-        self.update_ui_language()
-        self.log(f"🌐 Language switched to: {lang_code}", "info")
+            msg.setWindowTitle("Language Saved")
+            msg.setText("Language preference saved successfully.")
+            msg.setInformativeText("Please restart the application manually to apply the change.")
+        msg.exec_()
     
     def update_ui_language(self):
         """Update all UI elements with current language"""
