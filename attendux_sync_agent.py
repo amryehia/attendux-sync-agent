@@ -420,6 +420,12 @@ class AttenduxSyncAgent(QMainWindow):
         control_widget = QWidget()
         control_layout = QHBoxLayout(control_widget)
         
+        # Dashboard button
+        self.dashboard_btn = QPushButton("🌐 Open Dashboard")
+        self.dashboard_btn.setObjectName("primaryButton")
+        self.dashboard_btn.clicked.connect(self.open_dashboard)
+        control_layout.addWidget(self.dashboard_btn)
+        
         self.sync_now_btn = QPushButton("▶ Sync Now")
         self.sync_now_btn.setObjectName("successButton")
         self.sync_now_btn.clicked.connect(self.start_sync)
@@ -495,6 +501,12 @@ class AttenduxSyncAgent(QMainWindow):
         show_action = QAction("Show", self)
         show_action.triggered.connect(self.show)
         tray_menu.addAction(show_action)
+        
+        dashboard_action = QAction("Open Dashboard", self)
+        dashboard_action.triggered.connect(self.open_dashboard)
+        tray_menu.addAction(dashboard_action)
+        
+        tray_menu.addSeparator()
         
         sync_action = QAction("Sync Now", self)
         sync_action.triggered.connect(self.start_sync)
@@ -583,6 +595,25 @@ class AttenduxSyncAgent(QMainWindow):
             self.log("❌ Invalid license key or expired", "error")
         
         self.connect_btn.setEnabled(True)
+    
+    def open_dashboard(self):
+        """Open Attendux dashboard in web browser"""
+        import webbrowser
+        dashboard_url = "https://app.attendux.com"
+        
+        try:
+            webbrowser.open(dashboard_url)
+            self.log(f"🌐 Opening dashboard: {dashboard_url}", "info")
+            
+            if self.notifications_checkbox.isChecked():
+                self.tray_icon.showMessage(
+                    "Dashboard Opened",
+                    "Attendux dashboard opened in your browser",
+                    QSystemTrayIcon.Information,
+                    2000
+                )
+        except Exception as e:
+            self.log(f"❌ Failed to open dashboard: {str(e)}", "error")
     
     def load_company_devices(self):
         """Load devices from cloud for this company"""
