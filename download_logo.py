@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Download Attendux logo for app icon
 """
@@ -18,14 +19,14 @@ def download_logo():
         if response.status_code == 200:
             with open(OUTPUT_FILE, 'wb') as f:
                 f.write(response.content)
-            print(f"✅ Logo saved to {OUTPUT_FILE}")
+            print(f"[SUCCESS] Logo saved to {OUTPUT_FILE}")
             return True
         else:
-            print(f"❌ Failed to download logo: HTTP {response.status_code}")
+            print(f"[ERROR] Failed to download logo: HTTP {response.status_code}")
             return False
             
     except Exception as e:
-        print(f"❌ Error downloading logo: {e}")
+        print(f"[ERROR] Error downloading logo: {e}")
         return False
 
 if __name__ == '__main__':
