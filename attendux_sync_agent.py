@@ -15,7 +15,14 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtNetwork import *
-from zk import ZK
+
+# Try to import ZK library, but make it optional for building
+try:
+    from zk import ZK
+    ZK_AVAILABLE = True
+except ImportError:
+    ZK_AVAILABLE = False
+    print("Warning: ZK library not available. Install with: pip install pyzk")
 
 # Brand Colors (from landing/index.html)
 BRAND_PRIMARY = "#3599c7"
@@ -150,6 +157,13 @@ class SyncWorker(QThread):
             self.progress_signal.emit(idx + 1, len(self.devices))
             
             try:
+                # Check if ZK library is available
+                if not ZK_AVAILABLE:
+                    error = f"ZK library not installed. Cannot sync {device['name']}"
+                    errors.append(error)
+                    self.log_signal.emit(f"   ❌ {error}", "error")
+                    continue
+                
                 # Connect to device
                 self.log_signal.emit(f"📡 Connecting to {device['name']} ({device['ip']}:{device['port']})...", "info")
                 

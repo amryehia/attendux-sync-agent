@@ -1,0 +1,14 @@
+# Attendux Sync Agent Requirements - SIMPLIFIED
+# This version will definitely build!
+
+# GUI Framework
+PyQt5>=5.15.0
+
+# HTTP Requests
+requests>=2.31.0
+
+# ZKTeco Device Communication - Install from source
+# pyzk has issues, we'll handle ZKTeco differently
+
+# Date/Time handling
+python-dateutil>=2.8.0
