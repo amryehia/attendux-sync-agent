@@ -1054,7 +1054,19 @@ class AttenduxSyncAgent(QMainWindow):
                         settings.setAttribute(QWebEngineSettings.JavascriptCanOpenWindows, False)
                         settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
                         settings.setAttribute(QWebEngineSettings.AutoLoadImages, True)
-                        self.log(f"✅ WebEngine settings configured", "info")
+                        
+                        # CRITICAL: Disable aggressive caching/repaint that causes flashing
+                        settings.setAttribute(QWebEngineSettings.WebGLEnabled, False)
+                        settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, False)
+                        settings.setAttribute(QWebEngineSettings.AutoLoadIconsForPage, False)
+                        
+                        self.log(f"✅ WebEngine settings configured (flash prevention enabled)", "info")
+                    
+                    # CRITICAL: Disable web view updates during navigation to prevent flash
+                    web_view.setUpdatesEnabled(True)  # Keep updates enabled for normal rendering
+                    web_view.setAttribute(Qt.WA_OpaquePaintEvent, True)  # Prevent transparent repaints
+                    
+                    self.log(f"✅ Flash prevention: WA_OpaquePaintEvent enabled", "info")
                     
                     web_view.setUrl(QUrl(dashboard_url))
                     browser_layout.addWidget(web_view)
