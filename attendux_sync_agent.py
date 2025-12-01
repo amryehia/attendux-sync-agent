@@ -962,13 +962,36 @@ class AttenduxSyncAgent(QMainWindow):
                         
                         profile.setCachePath(cache_dir)
                         profile.setPersistentStoragePath(storage_dir)
+                        
+                        # Set a proper User-Agent to avoid detection issues
+                        profile.setHttpUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                        
+                        # Disable HTTP strict transport security (HSTS) to avoid issues
+                        profile.setHttpCacheType(QWebEngineProfile.MemoryHttpCache)
                     
                     # Create web view - takes full window (no toolbar)
                     web_view = QWebEngineView()
                     
+                    # Track URL changes to detect redirect loops
+                    self.url_change_count = 0
+                    self.last_url = None
+                    
                     # Add URL change handler to detect refresh issues
                     def on_url_changed(url):
-                        self.log(f"🌐 URL Changed: {url.toString()}", "info")
+                        url_str = url.toString()
+                        self.log(f"🌐 URL Changed: {url_str}", "info")
+                        
+                        # Detect redirect loop (same URL changing repeatedly)
+                        if self.last_url == url_str:
+                            self.url_change_count += 1
+                            if self.url_change_count > 3:
+                                self.log(f"⚠️ WARNING: Redirect loop detected! URL: {url_str}", "error")
+                                self.log(f"⚠️ Stopping page load to prevent infinite loop", "error")
+                                web_view.stop()
+                                return
+                        else:
+                            self.url_change_count = 0
+                            self.last_url = url_str
                     
                     def on_load_started():
                         self.log(f"🔄 Page load started...", "info")
@@ -978,21 +1001,41 @@ class AttenduxSyncAgent(QMainWindow):
                             self.log(f"✅ Page loaded successfully", "info")
                             # Inject JavaScript to disable any auto-refresh or meta refresh tags
                             inject_script = """
-                            // Remove any meta refresh tags
-                            var metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
-                            if (metaRefresh) {
-                                metaRefresh.remove();
-                                console.log('Removed meta refresh tag');
-                            }
-                            
-                            // Override location.reload to prevent auto-refresh
-                            var originalReload = window.location.reload;
-                            window.location.reload = function() {
-                                console.warn('Blocked automatic page reload attempt');
-                                return false;
-                            };
-                            
-                            console.log('Auto-refresh prevention initialized');
+                            (function() {
+                                // Remove any meta refresh tags
+                                var metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
+                                if (metaRefresh) {
+                                    metaRefresh.remove();
+                                    console.log('Attendux Sync: Removed meta refresh tag');
+                                }
+                                
+                                // Store original reload function
+                                var originalReload = window.location.reload;
+                                var reloadAttempts = 0;
+                                
+                                // Override location.reload to prevent auto-refresh
+                                window.location.reload = function(forcedReload) {
+                                    reloadAttempts++;
+                                    console.warn('Attendux Sync: Blocked automatic page reload attempt #' + reloadAttempts);
+                                    console.trace('Reload called from:');
+                                    // Don't actually reload
+                                    return false;
+                                };
+                                
+                                // Prevent setInterval/setTimeout from calling reload
+                                var originalSetInterval = window.setInterval;
+                                window.setInterval = function(func, delay) {
+                                    // Check if function calls reload
+                                    var funcStr = func.toString();
+                                    if (funcStr.includes('reload') || funcStr.includes('location.href')) {
+                                        console.warn('Attendux Sync: Blocked setInterval that calls reload/redirect');
+                                        return 0; // Return dummy interval ID
+                                    }
+                                    return originalSetInterval.apply(this, arguments);
+                                };
+                                
+                                console.log('Attendux Sync: Auto-refresh prevention initialized');
+                            })();
                             """
                             web_view.page().runJavaScript(inject_script)
                         else:
@@ -1001,6 +1044,17 @@ class AttenduxSyncAgent(QMainWindow):
                     web_view.urlChanged.connect(on_url_changed)
                     web_view.loadStarted.connect(on_load_started)
                     web_view.loadFinished.connect(on_load_finished)
+                    
+                    # Enable web features that might be needed
+                    if WEBENGINE_AVAILABLE:
+                        from PyQt5.QtWebEngineWidgets import QWebEngineSettings
+                        settings = web_view.settings()
+                        settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
+                        settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
+                        settings.setAttribute(QWebEngineSettings.JavascriptCanOpenWindows, False)
+                        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+                        settings.setAttribute(QWebEngineSettings.AutoLoadImages, True)
+                        self.log(f"✅ WebEngine settings configured", "info")
                     
                     web_view.setUrl(QUrl(dashboard_url))
                     browser_layout.addWidget(web_view)
