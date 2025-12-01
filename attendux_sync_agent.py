@@ -965,6 +965,43 @@ class AttenduxSyncAgent(QMainWindow):
                     
                     # Create web view - takes full window (no toolbar)
                     web_view = QWebEngineView()
+                    
+                    # Add URL change handler to detect refresh issues
+                    def on_url_changed(url):
+                        self.log(f"🌐 URL Changed: {url.toString()}", "info")
+                    
+                    def on_load_started():
+                        self.log(f"🔄 Page load started...", "info")
+                    
+                    def on_load_finished(success):
+                        if success:
+                            self.log(f"✅ Page loaded successfully", "info")
+                            # Inject JavaScript to disable any auto-refresh or meta refresh tags
+                            inject_script = """
+                            // Remove any meta refresh tags
+                            var metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
+                            if (metaRefresh) {
+                                metaRefresh.remove();
+                                console.log('Removed meta refresh tag');
+                            }
+                            
+                            // Override location.reload to prevent auto-refresh
+                            var originalReload = window.location.reload;
+                            window.location.reload = function() {
+                                console.warn('Blocked automatic page reload attempt');
+                                return false;
+                            };
+                            
+                            console.log('Auto-refresh prevention initialized');
+                            """
+                            web_view.page().runJavaScript(inject_script)
+                        else:
+                            self.log(f"❌ Page load failed", "error")
+                    
+                    web_view.urlChanged.connect(on_url_changed)
+                    web_view.loadStarted.connect(on_load_started)
+                    web_view.loadFinished.connect(on_load_finished)
+                    
                     web_view.setUrl(QUrl(dashboard_url))
                     browser_layout.addWidget(web_view)
                     
