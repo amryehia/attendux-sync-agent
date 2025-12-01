@@ -1630,11 +1630,20 @@ def main():
     try:
         # Windows-specific fixes
         if PLATFORM == 'Windows':
+            # CRITICAL: Force software rendering to prevent GPU-based flash/flicker
+            os.environ['QT_OPENGL'] = 'software'
+            os.environ['QT_ANGLE_PLATFORM'] = 'warp'  # Use WARP software renderer
+            os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'  # Disable sandbox for better compatibility
+            
+            print("✅ Windows environment variables set: QT_OPENGL=software, ANGLE=warp")
+            
             # Fix for Windows 10/11 high DPI scaling
             try:
                 from PyQt5.QtCore import Qt
-                QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-                QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+                # Disable high DPI scaling to prevent rendering issues
+                # (will be overridden by AA_DisableHighDpiScaling in app creation)
+                # QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+                # QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
             except:
                 pass
             
@@ -1656,6 +1665,22 @@ def main():
         app = QApplication(sys.argv)
         app.setApplicationName("Attendux Sync Agent")
         app.setOrganizationName("Attendux")
+        
+        # CRITICAL: Windows-specific fixes for flash/flicker issue
+        if PLATFORM == 'Windows':
+            # Force software OpenGL rendering (prevents GPU-based flicker)
+            app.setAttribute(Qt.AA_UseSoftwareOpenGL, True)
+            
+            # Disable high DPI scaling that can cause rendering issues
+            app.setAttribute(Qt.AA_DisableHighDpiScaling, True)
+            
+            # Use desktop OpenGL instead of ANGLE (prevents DirectX issues)
+            app.setAttribute(Qt.AA_UseDesktopOpenGL, True)
+            
+            # Enable smooth pixmap transform (reduces flash during paint)
+            app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+            
+            print("✅ Windows-specific rendering fixes applied (software OpenGL, no ANGLE)")
         
         # Set default font for better Windows rendering
         if PLATFORM == 'Windows':
