@@ -939,6 +939,30 @@ class AttenduxSyncAgent(QMainWindow):
                 browser_layout.setSpacing(0)
                 
                 try:
+                    # Configure persistent session profile for cookie/session storage
+                    if WEBENGINE_AVAILABLE:
+                        from PyQt5.QtWebEngineWidgets import QWebEngineProfile
+                        
+                        # Get or create persistent profile
+                        profile = QWebEngineProfile.defaultProfile()
+                        
+                        # Enable persistent cookies (critical for login sessions)
+                        profile.setPersistentCookiesPolicy(QWebEngineProfile.AllowPersistentCookies)
+                        
+                        # Set cache directory for persistence
+                        import os
+                        cache_dir = os.path.expanduser("~/.attendux_sync/cache")
+                        storage_dir = os.path.expanduser("~/.attendux_sync/storage")
+                        
+                        try:
+                            os.makedirs(cache_dir, exist_ok=True)
+                            os.makedirs(storage_dir, exist_ok=True)
+                        except:
+                            pass
+                        
+                        profile.setCachePath(cache_dir)
+                        profile.setPersistentStoragePath(storage_dir)
+                    
                     # Create web view - takes full window (no toolbar)
                     web_view = QWebEngineView()
                     web_view.setUrl(QUrl(dashboard_url))
