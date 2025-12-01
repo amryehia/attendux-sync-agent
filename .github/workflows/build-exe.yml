@@ -56,10 +56,12 @@ jobs:
     
     - name: Build EXE with PyInstaller
       run: |
-        if (Test-Path "logo.ico") {
-          pyinstaller --onefile --windowed --name "Attendux-Sync-Agent" --icon=logo.ico attendux_sync_agent.py
+        $iconArg = if (Test-Path "logo.ico") { "--icon=logo.ico" } else { "" }
+        
+        if ($iconArg) {
+          pyinstaller --onefile --windowed --name "Attendux-Sync-Agent" --hidden-import=PyQt5.QtWebEngineWidgets --hidden-import=PyQt5.QtWebEngineCore --collect-all PyQt5 --collect-all PyQtWebEngine $iconArg attendux_sync_agent.py
         } else {
-          pyinstaller --onefile --windowed --name "Attendux-Sync-Agent" attendux_sync_agent.py
+          pyinstaller --onefile --windowed --name "Attendux-Sync-Agent" --hidden-import=PyQt5.QtWebEngineWidgets --hidden-import=PyQt5.QtWebEngineCore --collect-all PyQt5 --collect-all PyQtWebEngine attendux_sync_agent.py
         }
       shell: powershell
     

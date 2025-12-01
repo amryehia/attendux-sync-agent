@@ -16,7 +16,14 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtNetwork import *
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+
+# Try to import QWebEngineView, but make it optional for Windows
+try:
+    from PyQt5.QtWebEngineWidgets import QWebEngineView
+    WEBENGINE_AVAILABLE = True
+except ImportError:
+    WEBENGINE_AVAILABLE = False
+    print("Warning: QtWebEngine not available. Dashboard will open in external browser.")
 
 # Platform-specific startup imports
 PLATFORM = platform.system()
@@ -382,12 +389,15 @@ class AttenduxSyncAgent(QMainWindow):
             QApplication.setLayoutDirection(Qt.LeftToRight)
         
         self.init_ui()
-        self.load_logo()
         self.update_ui_language()
         
-        # Auto-connect if license key exists
+        # Defer heavy operations to avoid blocking UI on startup
+        # Load logo asynchronously after UI is shown
+        QTimer.singleShot(500, self.load_logo_async)
+        
+        # Auto-connect if license key exists (defer to avoid blocking)
         if self.settings.get('license_key'):
-            QTimer.singleShot(1000, self.auto_connect)
+            QTimer.singleShot(2000, self.auto_connect)
     
     def tr(self, key):
         """Translate key to current language"""
@@ -769,13 +779,23 @@ class AttenduxSyncAgent(QMainWindow):
         
         self.tray_icon.activated.connect(self.tray_activated)
     
-    def load_logo(self):
-        """Download and display logo"""
-        try:
-            response = requests.get(LOGO_URL, timeout=5)
-            if response.status_code == 200:
+    def load_logo_async(self):
+        """Download and display logo asynchronously (non-blocking)"""
+        class LogoDownloader(QThread):
+            logo_ready = pyqtSignal(bytes)
+            
+            def run(self):
+                try:
+                    response = requests.get(LOGO_URL, timeout=5)
+                    if response.status_code == 200:
+                        self.logo_ready.emit(response.content)
+                except:
+                    pass
+        
+        def on_logo_ready(logo_data):
+            try:
                 pixmap = QPixmap()
-                pixmap.loadFromData(response.content)
+                pixmap.loadFromData(logo_data)
                 self.logo_label.setPixmap(pixmap)
                 
                 # Set tray icon and window icon
@@ -783,22 +803,32 @@ class AttenduxSyncAgent(QMainWindow):
                 self.tray_icon.setIcon(icon)
                 self.setWindowIcon(icon)
                 
-                # Save logo for macOS .app bundle icon
-                if PLATFORM == 'Darwin':
-                    icon_dir = os.path.join(os.path.expanduser("~"), ".attendux_sync")
-                    os.makedirs(icon_dir, exist_ok=True)
-                    icon_path = os.path.join(icon_dir, "logo.png")
-                    pixmap.save(icon_path, 'PNG')
-                    
-                # Save logo for Windows .ico file
-                elif PLATFORM == 'Windows':
-                    icon_dir = os.path.join(os.path.expanduser("~"), ".attendux_sync")
-                    os.makedirs(icon_dir, exist_ok=True)
-                    icon_path = os.path.join(icon_dir, "logo.png")
-                    pixmap.save(icon_path, 'PNG')
-                    
-        except Exception as e:
-            print(f"Failed to load logo: {e}")
+                # Save logo for future use
+                icon_dir = os.path.join(os.path.expanduser("~"), ".attendux_sync")
+                os.makedirs(icon_dir, exist_ok=True)
+                icon_path = os.path.join(icon_dir, "logo.png")
+                pixmap.save(icon_path, 'PNG')
+            except Exception as e:
+                print(f"Failed to set logo: {e}")
+        
+        # Try to load cached logo first (instant)
+        try:
+            icon_dir = os.path.join(os.path.expanduser("~"), ".attendux_sync")
+            icon_path = os.path.join(icon_dir, "logo.png")
+            if os.path.exists(icon_path):
+                pixmap = QPixmap(icon_path)
+                self.logo_label.setPixmap(pixmap)
+                icon = QIcon(pixmap)
+                self.tray_icon.setIcon(icon)
+                self.setWindowIcon(icon)
+                return  # Use cached logo, no need to download
+        except:
+            pass
+        
+        # Download in background thread
+        self.logo_downloader = LogoDownloader()
+        self.logo_downloader.logo_ready.connect(on_logo_ready)
+        self.logo_downloader.start()
     
     def auto_connect(self):
         """Auto-connect on startup"""
@@ -809,7 +839,7 @@ class AttenduxSyncAgent(QMainWindow):
             QTimer.singleShot(2000, self.resume_auto_sync)
     
     def connect_license(self):
-        """Connect to Attendux cloud"""
+        """Connect to Attendux cloud (async to avoid UI freeze)"""
         license_key = self.license_input.text().strip()
         
         if not license_key:
@@ -818,52 +848,79 @@ class AttenduxSyncAgent(QMainWindow):
         
         self.log("🔑 Verifying license...", "info")
         self.connect_btn.setEnabled(False)
+        self.connect_btn.setText("Connecting..." if self.current_language == 'en' else "جاري الاتصال...")
         
         # Create API instance
         self.api = AttenduxAPI(license_key)
         
-        # Verify license
-        result = self.api.verify_license()
+        # Verify license in background thread
+        class LicenseVerifier(QThread):
+            result_ready = pyqtSignal(dict)
+            
+            def __init__(self, api):
+                super().__init__()
+                self.api = api
+            
+            def run(self):
+                try:
+                    result = self.api.verify_license()
+                    self.result_ready.emit(result if result else {})
+                except Exception as e:
+                    print(f"License verification error: {e}")
+                    self.result_ready.emit({})
         
-        if result and result.get('valid'):
-            self.company_info = result.get('company', {})
+        def on_result_ready(result):
+            if result and result.get('valid'):
+                self.company_info = result.get('company', {})
+                
+                # Update UI
+                self.status_indicator.setStyleSheet(f"color: {BRAND_SUCCESS}; font-size: 24px;")
+                self.status_label.setText(f"✅ {self.tr('connected')} - {self.company_info.get('name', 'Unknown')}")
+                
+                # Show company info
+                self.company_name_label.setText(f"{self.tr('company_label')}: {self.company_info.get('name', 'N/A')}")
+                self.company_plan_label.setText(f"{self.tr('plan_label')}: {self.company_info.get('plan', 'N/A')}")
+                
+                expiry = self.company_info.get('license_expiry', 'N/A')
+                self.company_expiry_label.setText(f"{self.tr('license_expires')}: {expiry}")
+                self.company_info_widget.setVisible(True)
+                
+                # Enable controls
+                self.refresh_devices_btn.setEnabled(True)
+                self.sync_now_btn.setEnabled(True)
+                self.start_sync_btn.setEnabled(True)
+                
+                # Save license key
+                self.settings['license_key'] = license_key
+                self.save_settings()
+                
+                self.log(f"✅ Connected as {self.company_info.get('name')}", "success")
+                
+                # Load devices (also async)
+                QTimer.singleShot(500, self.load_company_devices)
+                
+            else:
+                self.status_indicator.setStyleSheet(f"color: {BRAND_DANGER}; font-size: 24px;")
+                self.status_label.setText("❌ Invalid License")
+                self.log("❌ Invalid license key or expired", "error")
             
-            # Update UI
-            self.status_indicator.setStyleSheet(f"color: {BRAND_SUCCESS}; font-size: 24px;")
-            self.status_label.setText(f"✅ {self.tr('connected')} - {self.company_info.get('name', 'Unknown')}")
-            
-            # Show company info
-            self.company_name_label.setText(f"{self.tr('company_label')}: {self.company_info.get('name', 'N/A')}")
-            self.company_plan_label.setText(f"{self.tr('plan_label')}: {self.company_info.get('plan', 'N/A')}")
-            
-            expiry = self.company_info.get('license_expiry', 'N/A')
-            self.company_expiry_label.setText(f"{self.tr('license_expires')}: {expiry}")
-            self.company_info_widget.setVisible(True)
-            
-            # Enable controls
-            self.refresh_devices_btn.setEnabled(True)
-            self.sync_now_btn.setEnabled(True)
-            self.start_sync_btn.setEnabled(True)
-            
-            # Save license key
-            self.settings['license_key'] = license_key
-            self.save_settings()
-            
-            self.log(f"✅ Connected as {self.company_info.get('name')}", "success")
-            
-            # Load devices
-            self.load_company_devices()
-            
-        else:
-            self.status_indicator.setStyleSheet(f"color: {BRAND_DANGER}; font-size: 24px;")
-            self.status_label.setText("❌ Invalid License")
-            self.log("❌ Invalid license key or expired", "error")
+            self.connect_btn.setEnabled(True)
+            self.connect_btn.setText(self.tr('connect'))
         
-        self.connect_btn.setEnabled(True)
+        self.license_verifier = LicenseVerifier(self.api)
+        self.license_verifier.result_ready.connect(on_result_ready)
+        self.license_verifier.start()
     
     def open_dashboard(self):
         """Open Attendux dashboard in embedded browser - fullscreen without toolbar"""
         dashboard_url = "https://app.attendux.com"
+        
+        # If QtWebEngine is not available, use external browser
+        if not WEBENGINE_AVAILABLE:
+            import webbrowser
+            webbrowser.open(dashboard_url)
+            self.log(f"🌐 Opening dashboard in external browser", "info")
+            return
         
         try:
             # Create dashboard window if not exists
@@ -881,13 +938,21 @@ class AttenduxSyncAgent(QMainWindow):
                 browser_layout.setContentsMargins(0, 0, 0, 0)
                 browser_layout.setSpacing(0)
                 
-                # Create web view - takes full window (no toolbar)
-                web_view = QWebEngineView()
-                web_view.setUrl(QUrl(dashboard_url))
-                browser_layout.addWidget(web_view)
-                
-                # Store web_view reference for potential future use
-                self.dashboard_webview = web_view
+                try:
+                    # Create web view - takes full window (no toolbar)
+                    web_view = QWebEngineView()
+                    web_view.setUrl(QUrl(dashboard_url))
+                    browser_layout.addWidget(web_view)
+                    
+                    # Store web_view reference for potential future use
+                    self.dashboard_webview = web_view
+                except Exception as web_error:
+                    # Fallback: Open in external browser if QtWebEngine fails
+                    import webbrowser
+                    webbrowser.open(dashboard_url)
+                    self.dashboard_browser.close()
+                    self.log(f"🌐 Opening dashboard in external browser (QtWebEngine error)", "info")
+                    return
             
             # Show the browser window
             self.dashboard_browser.show()
@@ -909,29 +974,50 @@ class AttenduxSyncAgent(QMainWindow):
             self.log(f"❌ Failed to open dashboard: {str(e)}", "error")
     
     def load_company_devices(self):
-        """Load devices from cloud for this company"""
+        """Load devices from cloud for this company (async)"""
         if not self.api:
             return
         
         self.log("📡 Loading devices from cloud...", "info")
+        self.refresh_devices_btn.setEnabled(False)
         
-        devices = self.api.get_company_devices()
+        class DeviceLoader(QThread):
+            devices_ready = pyqtSignal(list)
+            
+            def __init__(self, api):
+                super().__init__()
+                self.api = api
+            
+            def run(self):
+                try:
+                    devices = self.api.get_company_devices()
+                    self.devices_ready.emit(devices if devices else [])
+                except Exception as e:
+                    print(f"Device loading error: {e}")
+                    self.devices_ready.emit([])
         
-        if devices:
-            self.settings['devices'] = devices
-            self.save_settings()
+        def on_devices_ready(devices):
+            if devices:
+                self.settings['devices'] = devices
+                self.save_settings()
+                
+                # Update device list
+                self.devices_list.clear()
+                for device in devices:
+                    item_text = f"✓ {device['name']} - {device['ip']}:{device['port']} (ID: {device.get('id', 'N/A')})"
+                    item = QListWidgetItem(item_text)
+                    item.setData(Qt.UserRole, device)
+                    self.devices_list.addItem(item)
+                
+                self.log(f"✅ Loaded {len(devices)} devices for your company", "success")
+            else:
+                self.log("ℹ️ No devices found. Add devices in Attendux dashboard first.", "warning")
             
-            # Update device list
-            self.devices_list.clear()
-            for device in devices:
-                item_text = f"✓ {device['name']} - {device['ip']}:{device['port']} (ID: {device.get('id', 'N/A')})"
-                item = QListWidgetItem(item_text)
-                item.setData(Qt.UserRole, device)
-                self.devices_list.addItem(item)
-            
-            self.log(f"✅ Loaded {len(devices)} devices for your company", "success")
-        else:
-            self.log("ℹ️ No devices found. Add devices in Attendux dashboard first.", "warning")
+            self.refresh_devices_btn.setEnabled(True)
+        
+        self.device_loader = DeviceLoader(self.api)
+        self.device_loader.devices_ready.connect(on_devices_ready)
+        self.device_loader.start()
     
     def start_sync(self):
         """Start sync process"""
@@ -1023,7 +1109,7 @@ class AttenduxSyncAgent(QMainWindow):
         self.settings['sync_interval'] = self.interval_spinbox.value()
         
         # Handle startup (Windows or macOS)
-        auto_start_enabled = self.auto_start_checkbox.isChecked()
+        auto_start_enabled = self.startup_checkbox.isChecked()
         if auto_start_enabled != self.settings.get('auto_start'):
             if auto_start_enabled:
                 self.add_to_startup()
@@ -1414,14 +1500,77 @@ class AttenduxSyncAgent(QMainWindow):
 
 def main():
     """Main entry point"""
-    app = QApplication(sys.argv)
-    app.setApplicationName("Attendux Sync Agent")
-    app.setOrganizationName("Attendux")
-    
-    window = AttenduxSyncAgent()
-    window.show()
-    
-    sys.exit(app.exec_())
+    try:
+        # Windows-specific fixes
+        if PLATFORM == 'Windows':
+            # Fix for Windows 10/11 high DPI scaling
+            try:
+                from PyQt5.QtCore import Qt
+                QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+                QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+            except:
+                pass
+            
+            # Fix for Windows console window appearing
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Attendux.SyncAgent.1.0')
+            except:
+                pass
+            
+            # Set Windows process priority to normal to avoid freezing
+            try:
+                import psutil
+                p = psutil.Process()
+                p.nice(psutil.NORMAL_PRIORITY_CLASS)
+            except:
+                pass
+        
+        app = QApplication(sys.argv)
+        app.setApplicationName("Attendux Sync Agent")
+        app.setOrganizationName("Attendux")
+        
+        # Set default font for better Windows rendering
+        if PLATFORM == 'Windows':
+            from PyQt5.QtGui import QFont
+            font = QFont("Segoe UI", 9)
+            app.setFont(font)
+        
+        # Process events before showing window to ensure UI is responsive
+        QApplication.processEvents()
+        
+        window = AttenduxSyncAgent()
+        
+        # Process events again to finish initialization
+        QApplication.processEvents()
+        
+        window.show()
+        
+        # Final event processing to ensure window is fully shown
+        QApplication.processEvents()
+        
+        sys.exit(app.exec_())
+        
+    except Exception as e:
+        # Show error dialog on crash
+        import traceback
+        error_details = traceback.format_exc()
+        
+        try:
+            from PyQt5.QtWidgets import QMessageBox
+            error_app = QApplication(sys.argv) if not QApplication.instance() else QApplication.instance()
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setWindowTitle("Attendux Sync Agent - Startup Error")
+            msg.setText("Application failed to start")
+            msg.setInformativeText(str(e))
+            msg.setDetailedText(f"Platform: {PLATFORM}\nPython: {sys.version}\n\nFull Error:\n{error_details}")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+        except:
+            print(f"Fatal error: {e}")
+            print(error_details)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
