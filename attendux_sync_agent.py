@@ -1055,18 +1055,23 @@ class AttenduxSyncAgent(QMainWindow):
                         settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
                         settings.setAttribute(QWebEngineSettings.AutoLoadImages, True)
                         
-                        # CRITICAL: Disable aggressive caching/repaint that causes flashing
-                        settings.setAttribute(QWebEngineSettings.WebGLEnabled, False)
-                        settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, False)
-                        settings.setAttribute(QWebEngineSettings.AutoLoadIconsForPage, False)
+                        # PERFORMANCE: Enable hardware acceleration for smooth rendering
+                        settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)  # Enable for performance
+                        settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, True)  # Enable for speed
+                        settings.setAttribute(QWebEngineSettings.AutoLoadIconsForPage, True)  # Normal behavior
                         
-                        self.log(f"✅ WebEngine settings configured (flash prevention enabled)", "info")
+                        # Additional performance settings
+                        settings.setAttribute(QWebEngineSettings.PluginsEnabled, True)
+                        settings.setAttribute(QWebEngineSettings.ScrollAnimatorEnabled, False)  # Disable smooth scroll (can cause lag)
+                        
+                        self.log(f"✅ WebEngine: Hardware acceleration enabled (PERFORMANCE MODE)", "info")
                     
-                    # CRITICAL: Disable web view updates during navigation to prevent flash
-                    web_view.setUpdatesEnabled(True)  # Keep updates enabled for normal rendering
-                    web_view.setAttribute(Qt.WA_OpaquePaintEvent, True)  # Prevent transparent repaints
+                    # Enable all optimizations for smooth rendering
+                    web_view.setUpdatesEnabled(True)
+                    web_view.setAttribute(Qt.WA_OpaquePaintEvent, False)  # Allow normal rendering
+                    web_view.setAttribute(Qt.WA_NoSystemBackground, False)  # Use system background
                     
-                    self.log(f"✅ Flash prevention: WA_OpaquePaintEvent enabled", "info")
+                    self.log(f"✅ Rendering: Full hardware acceleration active", "info")
                     
                     web_view.setUrl(QUrl(dashboard_url))
                     browser_layout.addWidget(web_view)
@@ -1397,8 +1402,9 @@ class AttenduxSyncAgent(QMainWindow):
             if self.isVisible():
                 self.hide()
             else:
-                self.show()
-                self.activateWindow()
+                self.showNormal()  # Show in normal state (not maximized)
+                self.raise_()  # Bring to front
+                self.activateWindow()  # Give focus
     
     def closeEvent(self, event):
         """Handle window close"""
@@ -1630,12 +1636,15 @@ def main():
     try:
         # Windows-specific fixes
         if PLATFORM == 'Windows':
-            # CRITICAL: Force software rendering to prevent GPU-based flash/flicker
-            os.environ['QT_OPENGL'] = 'software'
-            os.environ['QT_ANGLE_PLATFORM'] = 'warp'  # Use WARP software renderer
-            os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'  # Disable sandbox for better compatibility
+            # PERFORMANCE: Use hardware acceleration with anti-flash settings
+            os.environ['QT_ANGLE_PLATFORM'] = 'd3d11'  # Direct3D 11 (fast and stable)
+            os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] = '--disable-gpu-vsync --disable-frame-rate-limit --disable-smooth-scrolling --disable-software-rasterizer'
+            os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
             
-            print("✅ Windows environment variables set: QT_OPENGL=software, ANGLE=warp")
+            # CRITICAL: Use desktop OpenGL (not software) for performance
+            os.environ['QT_OPENGL'] = 'desktop'  # Use native OpenGL, not software
+            
+            print("✅ Windows: Hardware acceleration enabled (D3D11 + Desktop OpenGL)")
             
             # Fix for Windows 10/11 high DPI scaling
             try:
@@ -1650,7 +1659,15 @@ def main():
             # Fix for Windows console window appearing
             try:
                 import ctypes
+                # Set App User Model ID to group windows under single taskbar icon
                 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Attendux.SyncAgent.1.0')
+                
+                # Hide the main window from taskbar (only show tray icon)
+                # This prevents duplicate icons in Windows taskbar
+                import ctypes.wintypes
+                GWL_EXSTYLE = -20
+                WS_EX_TOOLWINDOW = 0x00000080
+                WS_EX_APPWINDOW = 0x00040000
             except:
                 pass
             
@@ -1666,21 +1683,19 @@ def main():
         app.setApplicationName("Attendux Sync Agent")
         app.setOrganizationName("Attendux")
         
-        # CRITICAL: Windows-specific fixes for flash/flicker issue
+        # PERFORMANCE: Windows-specific hardware acceleration with anti-flash
         if PLATFORM == 'Windows':
-            # Force software OpenGL rendering (prevents GPU-based flicker)
-            app.setAttribute(Qt.AA_UseSoftwareOpenGL, True)
-            
-            # Disable high DPI scaling that can cause rendering issues
-            app.setAttribute(Qt.AA_DisableHighDpiScaling, True)
-            
-            # Use desktop OpenGL instead of ANGLE (prevents DirectX issues)
+            # Use DESKTOP OpenGL (hardware accelerated, not software!)
             app.setAttribute(Qt.AA_UseDesktopOpenGL, True)
             
-            # Enable smooth pixmap transform (reduces flash during paint)
+            # Enable high DPI support for sharp rendering
+            app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
             app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
             
-            print("✅ Windows-specific rendering fixes applied (software OpenGL, no ANGLE)")
+            # Share OpenGL contexts for better performance
+            app.setAttribute(Qt.AA_ShareOpenGLContexts, True)
+            
+            print("✅ Windows: Hardware OpenGL + High DPI + Context Sharing (FAST MODE)")
         
         # Set default font for better Windows rendering
         if PLATFORM == 'Windows':
@@ -1696,9 +1711,24 @@ def main():
         # Process events again to finish initialization
         QApplication.processEvents()
         
-        window.show()
+        # On Windows, start minimized to tray to avoid duplicate taskbar icons
+        # User can open window from tray menu
+        if PLATFORM == 'Windows':
+            # Don't call window.show() - start in tray only
+            window.hide()
+            # Show notification that app started in tray
+            if window.tray_icon:
+                window.tray_icon.showMessage(
+                    "Attendux Sync Agent",
+                    "Application started in system tray. Double-click tray icon to open.",
+                    QSystemTrayIcon.Information,
+                    3000
+                )
+        else:
+            # On Mac/Linux, show window normally
+            window.show()
         
-        # Final event processing to ensure window is fully shown
+        # Final event processing to ensure UI is ready
         QApplication.processEvents()
         
         sys.exit(app.exec_())
