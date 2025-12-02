@@ -1055,23 +1055,30 @@ class AttenduxSyncAgent(QMainWindow):
                         settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
                         settings.setAttribute(QWebEngineSettings.AutoLoadImages, True)
                         
-                        # PERFORMANCE: Enable hardware acceleration for smooth rendering
-                        settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)  # Enable for performance
-                        settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, True)  # Enable for speed
-                        settings.setAttribute(QWebEngineSettings.AutoLoadIconsForPage, True)  # Normal behavior
+                        # BALANCED: Disable heavy features to reduce lag
+                        settings.setAttribute(QWebEngineSettings.WebGLEnabled, False)  # Disable WebGL (causes lag)
+                        settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, False)  # Disable 2D accel (causes lag)
+                        settings.setAttribute(QWebEngineSettings.AutoLoadIconsForPage, False)  # Skip favicons (faster load)
                         
-                        # Additional performance settings
-                        settings.setAttribute(QWebEngineSettings.PluginsEnabled, True)
-                        settings.setAttribute(QWebEngineSettings.ScrollAnimatorEnabled, False)  # Disable smooth scroll (can cause lag)
+                        # Additional optimization settings
+                        settings.setAttribute(QWebEngineSettings.PluginsEnabled, False)  # No plugins needed
+                        settings.setAttribute(QWebEngineSettings.ScrollAnimatorEnabled, False)  # No smooth scroll
+                        settings.setAttribute(QWebEngineSettings.FocusOnNavigationEnabled, False)  # Reduce focus events
+                        settings.setAttribute(QWebEngineSettings.AllowRunningInsecureContent, False)  # Security + speed
                         
-                        self.log(f"✅ WebEngine: Hardware acceleration enabled (PERFORMANCE MODE)", "info")
+                        self.log(f"✅ WebEngine: Balanced mode (WebGL OFF, 2D Canvas OFF, optimized)", "info")
                     
-                    # Enable all optimizations for smooth rendering
+                    # BALANCED: Optimize rendering for stability and performance
                     web_view.setUpdatesEnabled(True)
-                    web_view.setAttribute(Qt.WA_OpaquePaintEvent, False)  # Allow normal rendering
-                    web_view.setAttribute(Qt.WA_NoSystemBackground, False)  # Use system background
+                    web_view.setAttribute(Qt.WA_OpaquePaintEvent, True)  # Opaque (faster, no transparency)
+                    web_view.setAttribute(Qt.WA_NoSystemBackground, True)  # Skip system bg (faster)
+                    web_view.setAttribute(Qt.WA_DontCreateNativeAncestors, True)  # Reduce native widget overhead
                     
-                    self.log(f"✅ Rendering: Full hardware acceleration active", "info")
+                    # Limit render updates (reduces CPU usage)
+                    if PLATFORM == 'Windows':
+                        web_view.setUpdatesEnabled(True)  # Keep updates but optimize
+                    
+                    self.log(f"✅ Rendering: Balanced mode (opaque paint, optimized updates)", "info")
                     
                     web_view.setUrl(QUrl(dashboard_url))
                     browser_layout.addWidget(web_view)
@@ -1636,15 +1643,21 @@ def main():
     try:
         # Windows-specific fixes
         if PLATFORM == 'Windows':
-            # PERFORMANCE: Use hardware acceleration with anti-flash settings
-            os.environ['QT_ANGLE_PLATFORM'] = 'd3d11'  # Direct3D 11 (fast and stable)
-            os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] = '--disable-gpu-vsync --disable-frame-rate-limit --disable-smooth-scrolling --disable-software-rasterizer'
+            # BALANCED: Moderate acceleration (no flash, good performance)
+            # Use WARP (software renderer) instead of full hardware for stability
+            os.environ['QT_ANGLE_PLATFORM'] = 'warp'  # Software D3D renderer (stable, no flash)
+            
+            # Chromium flags for BALANCED performance
+            os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] = '--disable-gpu-vsync --disable-smooth-scrolling --enable-low-end-device-mode --disable-accelerated-video-decode'
             os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
             
-            # CRITICAL: Use desktop OpenGL (not software) for performance
-            os.environ['QT_OPENGL'] = 'desktop'  # Use native OpenGL, not software
+            # Moderate OpenGL - not full hardware, not full software
+            os.environ['QT_OPENGL'] = 'angle'  # Use ANGLE for compatibility
             
-            print("✅ Windows: Hardware acceleration enabled (D3D11 + Desktop OpenGL)")
+            # Limit browser processes to reduce memory/CPU usage
+            os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] += ' --single-process --disable-extensions'
+            
+            print("✅ Windows: Balanced mode (WARP renderer + ANGLE + low-end optimizations)")
             
             # Fix for Windows 10/11 high DPI scaling
             try:
@@ -1683,19 +1696,23 @@ def main():
         app.setApplicationName("Attendux Sync Agent")
         app.setOrganizationName("Attendux")
         
-        # PERFORMANCE: Windows-specific hardware acceleration with anti-flash
+        # BALANCED: Windows-specific settings for stability + performance
         if PLATFORM == 'Windows':
-            # Use DESKTOP OpenGL (hardware accelerated, not software!)
-            app.setAttribute(Qt.AA_UseDesktopOpenGL, True)
+            # Use ANGLE (compatible with more systems) instead of Desktop OpenGL
+            # This prevents sluggishness on some GPU configurations
+            # Note: NOT using AA_UseSoftwareOpenGL or AA_UseDesktopOpenGL
+            # Let Qt auto-detect the best renderer
             
-            # Enable high DPI support for sharp rendering
-            app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-            app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+            # Disable high DPI scaling to reduce rendering overhead
+            app.setAttribute(Qt.AA_DisableHighDpiScaling, True)
             
-            # Share OpenGL contexts for better performance
+            # Share OpenGL contexts for better memory usage
             app.setAttribute(Qt.AA_ShareOpenGLContexts, True)
             
-            print("✅ Windows: Hardware OpenGL + High DPI + Context Sharing (FAST MODE)")
+            # Use raster engine for widgets (faster than native)
+            app.setAttribute(Qt.AA_UseHighDpiPixmaps, False)
+            
+            print("✅ Windows: Balanced mode (Auto-detect renderer + DPI optimizations)")
         
         # Set default font for better Windows rendering
         if PLATFORM == 'Windows':
