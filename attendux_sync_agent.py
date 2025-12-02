@@ -1647,15 +1647,12 @@ def main():
             # Use WARP (software renderer) instead of full hardware for stability
             os.environ['QT_ANGLE_PLATFORM'] = 'warp'  # Software D3D renderer (stable, no flash)
             
-            # Chromium flags for BALANCED performance
-            os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] = '--disable-gpu-vsync --disable-smooth-scrolling --enable-low-end-device-mode --disable-accelerated-video-decode'
+            # Chromium flags for BALANCED performance (all in one line to avoid concatenation issues)
+            os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] = '--disable-gpu-vsync --disable-smooth-scrolling --enable-low-end-device-mode --disable-accelerated-video-decode --single-process --disable-extensions'
             os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
             
             # Moderate OpenGL - not full hardware, not full software
             os.environ['QT_OPENGL'] = 'angle'  # Use ANGLE for compatibility
-            
-            # Limit browser processes to reduce memory/CPU usage
-            os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] += ' --single-process --disable-extensions'
             
             print("✅ Windows: Balanced mode (WARP renderer + ANGLE + low-end optimizations)")
             
